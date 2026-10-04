@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
@@ -311,6 +312,12 @@ fun StopScreen(
             visitedIds = visitedIds,
             currentStopId = state.currentStopId,
             nextStopId = state.nextStopId,
+            introShown = introPages > 0,
+            introSelected = settledStopIndex < 0,
+            onPickIntro = {
+                showStopList = false
+                moveToPage(0)
+            },
             onPick = { picked ->
                 showStopList = false
                 // Jumping around the list slides the pager across rather than pushing a new screen;
@@ -850,6 +857,10 @@ private fun StopListSheet(
     nextStopId: String?,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** The introduction is a page of its own, so it belongs in this list too. */
+    introShown: Boolean = false,
+    introSelected: Boolean = false,
+    onPickIntro: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -870,6 +881,51 @@ private fun StopListSheet(
                 modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
             )
             LazyColumn {
+                if (introShown) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 3.dp)
+                                .clickable { onPickIntro() },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (introSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                },
+                            ),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Introduction", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        text = "Before you set off",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 items(stops.size) { i ->
                     val stop = stops[i]
                     val container = when {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Explore
@@ -70,6 +71,8 @@ fun TourDetailScreen(
     onBack: () -> Unit,
     onStartTour: () -> Unit,
     onOpenStop: (String) -> Unit,
+    /** Opens the walk's introduction, which heads the route. */
+    onOpenIntroduction: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val repository = ServiceLocator.repository
@@ -98,8 +101,6 @@ fun TourDetailScreen(
     val mapLat = trackerFix?.latitude
     val mapLng = trackerFix?.longitude
     val mapAccuracy = trackerFix?.accuracy
-
-    var showOverview by remember { mutableStateOf(false) }
 
     // Same assistant, same interaction as the walking screens: a docked bar that opens the
     // conversation over the page, rather than a separate full-screen chat.
@@ -271,21 +272,6 @@ fun TourDetailScreen(
                     tourEntity?.bestTimeOfDay?.takeIf { it.isNotBlank() }?.let {
                         LabeledParagraph("Best time", it)
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = if (showOverview) "Hide introduction" else "Read the introduction",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clickable { showOverview = !showOverview }
-                            .padding(vertical = 8.dp),
-                    )
-                    if (showOverview) {
-                        Text(
-                            text = tourEntity?.overviewText.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
                 }
             }
 
@@ -298,6 +284,45 @@ fun TourDetailScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+
+            // The introduction heads the route rather than hiding behind a toggle: it is the first
+            // thing the walk says, and it is a page of the stop screen now, like any stop.
+            if (tourEntity?.overviewText?.isNotBlank() == true) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clickable(onClick = onOpenIntroduction),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    ) {
+                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Introduction", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = "Before you set off",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

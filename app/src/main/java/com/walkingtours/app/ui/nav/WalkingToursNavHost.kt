@@ -88,6 +88,7 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                     navController.navigate(Routes.resumeTouring(tourId))
                 },
                 onOpenStop = { stopId -> navController.navigate(Routes.stop(tourId, stopId)) },
+                onOpenIntroduction = { navController.navigate(Routes.resumeTouring(tourId)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
+import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.tour.TourSessionManager
 import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
@@ -145,10 +146,14 @@ fun StopScreen(
     }
 
     // The tour's own photograph, for the hero while no stop is current.
-    val tourHeroImage by produceState(initialValue = null as String?, tourId) {
+    // The tour itself, not just its photograph: the introduction page needs the overview text
+    // whether or not a walk is running, so it can be read before committing to the walk.
+    val tour by produceState(initialValue = null as TourEntity?, tourId) {
         repository.ensureContentLoaded()
-        value = repository.getTour(tourId)?.heroImage
+        value = repository.getTour(tourId)
     }
+    val tourHeroImage = tour?.heroImage
+    val tourOverviewText = tour?.overviewText.orEmpty()
     val stopProgress by remember(tourId) { repository.observeStopProgress(tourId) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val visitedIds = stopProgress.map { it.stopId }.toSet()
@@ -173,7 +178,9 @@ fun StopScreen(
     // an introduction keeps it as its first page from start to finish, which is exactly what lets
     // stop one's Previous lead back to it long after it has stopped talking. No running tour, or no
     // overview text, means there is nothing to give a page to.
-    val introPages = if (isLive && state.overviewText.isNotBlank()) 1 else 0
+    // Keyed on the tour's own introduction text, not on whether a walk is running: the page exists
+    // so the introduction can be read before starting, and so the all-stops list can offer it.
+    val introPages = if (tourOverviewText.isNotBlank()) 1 else 0
     fun stopIndexFor(page: Int) = page - introPages
 
     // A pager rather than a sideways gesture that only navigates on release, because the neighbouring
@@ -538,7 +545,7 @@ fun StopScreen(
                                     )
                                     Spacer(Modifier.height(14.dp))
                                     Transcript(
-                                        text = state.overviewText,
+                                        text = state.overviewText.ifBlank { tourOverviewText },
                                         highlightStart = if (overviewPlaying) narration.highlightStart else 0,
                                         highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
                                         style = MaterialTheme.typography.bodyMedium,

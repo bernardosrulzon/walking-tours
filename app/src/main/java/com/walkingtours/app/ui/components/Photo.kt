@@ -101,17 +101,22 @@ fun numberedMarkerIcon(
     fillColor: Int,
     visited: Boolean,
 ): Drawable {
+    // The badge is anchored by its bottom edge, so transparent padding below the circle becomes a
+    // silent northward offset on the map: the previous 8 px inset put every stop roughly 7 m from
+    // the place it names at zoom 17. Sizing the circle to the bitmap removes it, so the bottom edge
+    // of the ring sits exactly on the coordinate.
     val size = 110
+    val strokeWidth = 7f
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val radius = size / 2f - 8f
+    val radius = size / 2f - strokeWidth / 2f
 
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     paint.color = fillColor
     canvas.drawCircle(size / 2f, size / 2f, radius, paint)
 
     paint.style = Paint.Style.STROKE
-    paint.strokeWidth = 7f
+    paint.strokeWidth = strokeWidth
     paint.color = android.graphics.Color.WHITE
     canvas.drawCircle(size / 2f, size / 2f, radius, paint)
 

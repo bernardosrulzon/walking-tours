@@ -70,6 +70,7 @@ import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.tan
 
 /**
@@ -127,6 +128,21 @@ private const val MIN_USABLE_FRACTION = 0.25
  * The Google Maps path, when a key is present, is where a clean basemap comes from instead.
  */
 private const val TILE_SIZE_PX = 256.0
+
+/**
+ * The stop badge bitmap's edge length, in device pixels, matching [numberedMarkerIcon].
+ *
+ * Badges are anchored by their bottom edge, so every one of them hangs this far above the
+ * coordinate it names. The fit has to reserve that height or the top badge overflows the viewport
+ * while an equal-looking gap is left empty at the bottom.
+ */
+private const val MARKER_SIZE_PX = 110f
+
+/** Equatorial circumference, for converting zoom levels to ground distances. */
+private const val EARTH_CIRCUMFERENCE_M = 40_075_016.686
+
+/** Metres in one degree of latitude; the geodesic variation is immaterial at city scale. */
+private const val METRES_PER_DEGREE_LAT = 111_320.0
 
 /**
  * In-memory tile cache size. The default is small, which makes pinch-zoom stutter because tiles
@@ -580,6 +596,7 @@ fun TourMap(
                 widthPx = mapSize.width.toFloat(),
                 heightPx = mapSize.height.toFloat(),
                 paddingPx = (if (focusStops != null) FOCUS_PADDING_PX else FIT_PADDING_PX).toFloat(),
+                topInsetPx = MARKER_SIZE_PX,
             )
             mapView.controller.setZoom(fit.zoom)
             mapView.controller.setCenter(GeoPoint(fit.lat, fit.lng))
@@ -715,6 +732,8 @@ private fun GoogleTourMap(
                     paddingPx = (
                         if (focusStops != null) GOOGLE_FOCUS_PADDING_DP else GOOGLE_FIT_PADDING_DP
                         ).toFloat(),
+                    // The badge bitmap is 110 device pixels tall; Google measures in dp.
+                    topInsetPx = MARKER_SIZE_PX / density,
                 )
                 map.moveCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(fit.lat, fit.lng), fit.zoom.toFloat()),
@@ -830,22 +849,43 @@ private fun cameraFitFor(
     widthPx: Float,
     heightPx: Float,
     paddingPx: Float,
+    topInsetPx: Float = 0f,
 ): CameraFit {
     if (targets.size == 1) {
-        return CameraFit(targets[0].lat, targets[0].lng, SINGLE_STOP_ZOOM)
+        val lat = targets[0].lat +
+            northFor(topInsetPx / 2f, SINGLE_STOP_ZOOM, targets[0].lat)
+        return CameraFit(lat, targets[0].lng, SINGLE_STOP_ZOOM)
     }
 
     val box = BoundingBox.fromGeoPoints(targets.map { GeoPoint(it.lat, it.lng) })
-    return CameraFit(
-        lat = (box.latNorth + box.latSouth) / 2.0,
-        lng = (box.lonEast + box.lonWest) / 2.0,
-        zoom = fitZoomFor(
-            box = box,
-            widthPx = widthPx,
-            heightPx = heightPx,
-            paddingPx = paddingPx,
-        ),
+    val zoom = fitZoomFor(
+        box = box,
+        widthPx = widthPx,
+        heightPx = heightPx,
+        paddingPx = paddingPx,
+        topInsetPx = topInsetPx,
     )
+    // Reserving the badge height at the top pushes the box down the screen, so the point the camera
+    // centres on belongs half a badge north of the box centre. That is what puts the badges
+    // themselves — not the bare coordinates — in the middle of what you see.
+    val boxLat = (box.latNorth + box.latSouth) / 2.0
+    return CameraFit(
+        lat = boxLat + northFor(topInsetPx / 2f, zoom, boxLat),
+        lng = (box.lonEast + box.lonWest) / 2.0,
+        zoom = zoom,
+    )
+}
+
+/**
+ * How far north a viewport distance of [units] reaches at [zoom], in degrees of latitude.
+ *
+ * [units] is in whatever the caller measures its viewport in — device pixels for osmdroid, dp for
+ * Google — which is also the unit its zoom is defined against, so the same formula serves both.
+ */
+private fun northFor(units: Float, zoom: Double, atLat: Double): Double {
+    val metresPerUnit = EARTH_CIRCUMFERENCE_M / (TILE_SIZE_PX * 2.0.pow(zoom)) *
+        cos(Math.toRadians(atLat))
+    return units.toDouble() * metresPerUnit / METRES_PER_DEGREE_LAT
 }
 
 /** Where to draw the walker's dot, already glided to hide GPS noise. */
@@ -951,9 +991,14 @@ private fun fitZoomFor(
     widthPx: Float,
     heightPx: Float,
     paddingPx: Float,
+    topInsetPx: Float = 0f,
 ): Double {
     val usableWidth = (widthPx - 2 * paddingPx).coerceAtLeast(widthPx * MIN_USABLE_FRACTION.toFloat())
-    val usableHeight = (heightPx - 2 * paddingPx).coerceAtLeast(heightPx * MIN_USABLE_FRACTION.toFloat())
+    // The top carries the padding plus the badge height: badges hang upwards, so reserving nothing
+    // above the topmost coordinate lets the badge overflow the edge while the bottom margin, which
+    // no badge occupies, reads as uneven padding.
+    val usableHeight = (heightPx - 2 * paddingPx - topInsetPx)
+        .coerceAtLeast(heightPx * MIN_USABLE_FRACTION.toFloat())
 
     val spanX = abs(mercatorX(east) - mercatorX(west)).coerceAtLeast(1e-9)
     val spanY = abs(mercatorY(south) - mercatorY(north)).coerceAtLeast(1e-9)
@@ -971,6 +1016,7 @@ private fun fitZoomFor(
     widthPx: Float,
     heightPx: Float,
     paddingPx: Float,
+    topInsetPx: Float = 0f,
 ): Double = fitZoomFor(
     north = box.latNorth,
     south = box.latSouth,
@@ -979,6 +1025,7 @@ private fun fitZoomFor(
     widthPx = widthPx,
     heightPx = heightPx,
     paddingPx = paddingPx,
+    topInsetPx = topInsetPx,
 )
 
 /**

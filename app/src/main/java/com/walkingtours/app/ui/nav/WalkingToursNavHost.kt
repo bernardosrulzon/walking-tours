@@ -28,6 +28,15 @@ object Routes {
      */
     const val STOP = "tour/{tourId}/stop?stopId={stopId}&startAt={startAt}"
 
+    /**
+     * Passed as `startAt` when the walker opened the introduction to read it rather than to walk.
+     *
+     * The resume route otherwise means "make sure the tour is running and follow its current stop",
+     * which for the introduction is wrong twice over: there is no stop to follow, and starting a
+     * tour to read a page picks whichever stop the walker happens to be standing nearest.
+     */
+    const val INTRO = "intro"
+
     fun tourDetail(tourId: String) = "tour/$tourId"
 
     fun stop(tourId: String, stopId: String) = "tour/$tourId/stop?stopId=$stopId"
@@ -88,7 +97,7 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                     navController.navigate(Routes.resumeTouring(tourId))
                 },
                 onOpenStop = { stopId -> navController.navigate(Routes.stop(tourId, stopId)) },
-                onOpenIntroduction = { navController.navigate(Routes.resumeTouring(tourId)) },
+                onOpenIntroduction = { navController.navigate(Routes.resumeTouring(tourId, Routes.INTRO)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

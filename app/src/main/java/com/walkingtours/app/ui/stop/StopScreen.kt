@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
+import com.walkingtours.app.ui.nav.Routes
 import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.tour.TourSessionManager
 import com.walkingtours.app.ui.chat.AskBar
@@ -133,9 +134,13 @@ fun StopScreen(
 
     val isResume = stopId == null
 
+    // Opened from the route list to be read. Not a walk: the tour must not be started, because
+    // starting one with no stop named nominates whichever stop the walker is nearest.
+    val wantsIntroduction = startAtStopId == Routes.INTRO
+
     // "Resume" means: make sure the tour is running, then follow the session's current stop.
     LaunchedEffect(tourId, startAtStopId, isResume) {
-        if (isResume && (state.tourId != tourId || !state.isRunning)) {
+        if (isResume && !wantsIntroduction && (state.tourId != tourId || !state.isRunning)) {
             session.startTour(tourId, startAtStopId)
         }
     }
@@ -217,6 +222,12 @@ fun StopScreen(
     var didInitialScroll by remember { mutableStateOf(false) }
     LaunchedEffect(allStops, stopId, state.currentStopId) {
         if (didInitialScroll || allStops.isEmpty() || pagerState.isScrollInProgress) {
+            return@LaunchedEffect
+        }
+        if (wantsIntroduction) {
+            // The introduction is what was asked for, so land on it and do not follow the session.
+            didInitialScroll = true
+            pagerState.scrollToPage(0)
             return@LaunchedEffect
         }
         val wanted = stopId ?: state.currentStopId ?: return@LaunchedEffect

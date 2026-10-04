@@ -8,7 +8,6 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.util.Log
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -29,7 +28,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -86,31 +84,35 @@ private val FORCE_FALLBACK_MAP = false
 /** Zoom used when the route is a single point. */
 private const val SINGLE_STOP_ZOOM = 17.0
 
-/** Air left between the outermost pin and the edge of the framed box. */
-private const val MARKER_GAP_DP = 6
+/** Air kept clear on both axes when the whole route is framed, in device pixels. */
+private const val FIT_PADDING_PX = 90
 
 /**
- * The strip along the top of a stop-page hero that the app's own Photo/Map chips occupy — their
- * 10 dp inset, a chip, and a little air. The fit must not put anything under it.
+ * Air kept clear on both axes when a stop page frames the current stop and the next one, in device
+ * pixels. Larger than [FIT_PADDING_PX] because the hero map is a much shorter viewport and carries
+ * the Photo/Map chips over its top corner.
+ */
+private const val FOCUS_PADDING_PX = 90
+
+/**
+ * Google's own margins, in **dp**, deliberately separate from the two above.
  *
- * Only a stop page has chips over its map; the tour overview draws a bare map. The map cannot see
- * them for itself, so they are inferred from a focus request, which is exactly what only a stop page
- * makes.
+ * The engines do not share a zoom definition. osmdroid ties zoom to the map view in device pixels;
+ * the Google Maps Android SDK ties it to the density-independent viewport. Feeding Google the pixel
+ * figures made its camera render a screen-density factor closer — on a 480 dpi phone the
+ * fourteen-stop overview cropped to eight stops. Measuring Google's viewport and margins in dp puts
+ * the fit in the same space the SDK defines its zoom in, which is why these are not shared.
  */
-private const val HERO_CHIPS_STRIP_DP = 42
+private const val GOOGLE_FIT_PADDING_DP = 32
+
+/** See [GOOGLE_FIT_PADDING_DP]. Larger because a stop-page hero is a much shorter viewport. */
+private const val GOOGLE_FOCUS_PADDING_DP = 56
 
 /**
- * The strip along the bottom that the engine's own logo and attribution occupy: Google's logo with
- * its "Map data" line, osmdroid's OpenStreetMap copyright. Both engines draw it over the map, so the
- * fit has to leave it clear too.
+ * The fit never treats an axis as narrower than this fraction of itself. Without it, padding wider
+ * than a short viewport would make the usable span negative and the logarithm undefined.
  */
-private const val ATTRIBUTION_STRIP_DP = 32
-
-/**
- * Only used if the pin drawable ever reports no intrinsic size; it mirrors the numbered pin bitmap
- * in [numberedMarkerIcon], which [rememberFitMargins] otherwise measures for itself.
- */
-private const val PIN_FALLBACK_PX = 110
+private const val MIN_USABLE_FRACTION = 0.25
 
 /**
  * Tiles are 256 px square.
@@ -558,17 +560,11 @@ fun TourMap(
     // traces. The camera is fitted with a few lines of Web Mercator arithmetic instead, which
     // cannot loop.
     val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    // The fit key includes the measured viewport, not just the route. The first size the map reports
-    // can be smaller than the size it finally lays out at, and a guard keyed on the route alone would
-    // lock in a zoom computed for that too-small viewport — which framed the whole route as a clump
-    // of markers in the middle of a far wider map.
-    // What has to stay clear around the framed box, measured per axis. The same value drives both the
-    // fit and the camera, so a margin can no longer be a magic number that silently costs a zoom
-    // level on one axis while the other axis never needed it.
-    val margins = rememberFitMargins(focusStops)
-    val routeKey = remember(fitTargets, mapSize, margins) {
-        fitTargets.joinToString("|") { "${it.lat},${it.lng}" } +
-            "@${mapSize.width}x${mapSize.height}+${margins.horizontalPx}x${margins.verticalPx}"
+    // Keyed on the targets alone: the camera is framed once per route, not once per layout pass. The
+    // viewport that fit is computed against is only known once the map has laid out, which the
+    // LaunchedEffect below waits for.
+    val routeKey = remember(fitTargets) {
+        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
     }
     LaunchedEffect(routeKey, mapSize) {
         if (fitTargets.isEmpty()) return@LaunchedEffect
@@ -577,27 +573,16 @@ fun TourMap(
         fittedRouteKey = routeKey
 
         runCatching {
-            // osmdroid measures its zoom against the map view in *pixels*, so this engine fits in
-            // pixels and only the Google path converts to dp. See [fitZoomFor].
+            // osmdroid measures its zoom against the map view in device pixels, which is exactly what
+            // the map reports here, so the raw measured viewport is what the fit is given.
             val fit = cameraFitFor(
                 targets = fitTargets,
-                width = mapSize.width.toFloat(),
-                height = mapSize.height.toFloat(),
-                horizontalMargin = margins.horizontalPx.toFloat(),
-                verticalMargin = margins.verticalPx.toFloat(),
-            )
-            Log.i(
-                TAG,
-                "OSM fit: view=${mapSize.width}x${mapSize.height} " +
-                    "padX=${margins.horizontalPx} padY=${margins.verticalPx} " +
-                    "targets=${fitTargets.size} -> ${fit.lat},${fit.lng} z=${fit.zoom}",
+                widthPx = mapSize.width.toFloat(),
+                heightPx = mapSize.height.toFloat(),
+                paddingPx = (if (focusStops != null) FOCUS_PADDING_PX else FIT_PADDING_PX).toFloat(),
             )
             mapView.controller.setZoom(fit.zoom)
             mapView.controller.setCenter(GeoPoint(fit.lat, fit.lng))
-            Log.i(
-                TAG,
-                "OSM camera now: z=${mapView.zoomLevelDouble} c=${mapView.mapCenter}",
-            )
         }
     }
 
@@ -646,10 +631,11 @@ private fun GoogleTourMap(
     onStopClick: (StopEntity) -> Unit,
 ) {
     val context = LocalContext.current
+
+    // Read here rather than inside the fit: this is a composable read and cannot live in a
+    // runCatching block. Google's camera is defined in dp, so the fit must be too.
+    val density = LocalDensity.current.density
     val cameraPositionState = rememberCameraPositionState()
-    // The device density, used only to hand Google a viewport in the density-independent units its
-    // zoom is defined against. See the fit below.
-    val density = LocalDensity.current
 
     // Straight hops, shown until the real route arrives and left in place if it never does. A
     // straight line between stops is a poor route but a much better map than no line at all.
@@ -673,32 +659,11 @@ private fun GoogleTourMap(
     // Same fit targets as the osmdroid map: a stop page asks for the stop you are on and the one you
     // walk to next; everywhere else the whole route is framed.
     val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    // The same clearances as the osmdroid map, translated into the units Google's camera is defined
-    // in rather than shared with it. See [fitZoomFor] for why that translation has to happen at all.
-    val margins = rememberFitMargins(focusStops)
-    val densityScale = density.density
-    val horizontalMarginDp = margins.horizontalPx / densityScale
-    val verticalMarginDp = margins.verticalPx / densityScale
-    // The fit key includes the measured viewport, not just the route. The first size the map reports
-    // can be smaller than the size it finally lays out at, and a guard keyed on the route alone would
-    // lock in a zoom computed for that too-small viewport — which framed the whole route as a clump
-    // of markers in the middle of a far wider map. The margins belong in the key for the same reason:
-    // a stop page and an overview frame the same route differently.
-    val routeKey = remember(fitTargets, mapSize, margins) {
-        fitTargets.joinToString("|") { "${it.lat},${it.lng}" } +
-            "@${mapSize.width}x${mapSize.height}+${margins.horizontalPx}x${margins.verticalPx}"
+    // Keyed on the targets alone, exactly as the osmdroid path is: the camera is framed once per
+    // route, not once per layout pass.
+    val routeKey = remember(fitTargets) {
+        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
     }
-    // The strips Google itself has to keep its logo and attribution out of. maps-compose takes these
-    // in dp and converts them with Density.roundToPx before calling GoogleMap.setPadding, which is
-    // Google's own way of being told that part of its map is obscured. osmdroid has no equivalent —
-    // its copyright overlay stays pinned to the corner — so there the whole clearance lives in the
-    // fit margins instead. These are the *real* strips, the chips above and the logo below, not the
-    // symmetric fit margin: that one also carries a pin's own height, and pushing Google's logo that
-    // far into the map would be needless.
-    val contentPadding = PaddingValues(
-        top = (margins.topStripPx / densityScale).dp,
-        bottom = (margins.bottomStripPx / densityScale).dp,
-    )
 
     // Applied through MapEffect rather than by assigning cameraPositionState.position from a
     // LaunchedEffect. MapEffect only runs once the map object actually exists, so the camera is
@@ -719,12 +684,6 @@ private fun GoogleTourMap(
             .onSizeChanged { mapSize = it },
         cameraPositionState = cameraPositionState,
         properties = MapProperties(mapStyleOptions = MapStyleOptions(HIDE_POIS_STYLE)),
-        // The inset the fit is computed against, handed to Google so its own camera padding agrees
-        // with ours. It keeps the pins clear of the "Google" logo at the bottom left and of the
-        // Photo/Map chips the stop hero draws over the top right, and it is Google-specific because
-        // only Google's camera has a padding of its own to keep in step. maps-compose converts this
-        // to pixels with Density.roundToPx before calling GoogleMap.setPadding, so it is given in dp.
-        contentPadding = contentPadding,
         // osmdroid's zoom buttons are hidden and the app draws its own position dot, so Google's
         // equivalents — including the "open in Google Maps" toolbar — would be new clutter. Every
         // gesture is left at its default of enabled.
@@ -739,47 +698,26 @@ private fun GoogleTourMap(
     ) {
         // Runs once the map object exists, so the camera is there to be moved. Placed inside the
         // map content because MapEffect belongs to the map's own composable scope.
-        MapEffect(routeKey, mapSize, contentPadding) { map ->
+        MapEffect(routeKey, mapSize) { map ->
             if (fitTargets.isEmpty()) return@MapEffect
             if (mapSize.width <= 0 || mapSize.height <= 0) return@MapEffect
             if (fittedRouteKey == routeKey) return@MapEffect
             fittedRouteKey = routeKey
 
             runCatching {
-                // The viewport is converted from measured pixels into dp *here*, and only for Google.
-                // The Maps SDK sizes its zoom against the density-independent viewport, so feeding it
-                // raw pixels makes every device's fit depend on its screen density: the same 280 dp
-                // hero is 840 px on a 480 dpi phone and 735 px on a 420 dpi emulator, and the pixel
-                // form of the same formula picked zoom 15 for the first and 14 for the second — and
-                // the phone's 15 then cropped fourteen stops down to the eight that fitted. In dp the
-                // two devices agree.
+                // The raw measured viewport, in device pixels, exactly as the osmdroid path uses it.
+                // In dp, not pixels: see GOOGLE_FIT_PADDING_DP. The viewport and the margin must
+                // both be in the space the SDK's zoom is defined in.
                 val fit = cameraFitFor(
                     targets = fitTargets,
-                    width = mapSize.width / densityScale,
-                    height = mapSize.height / densityScale,
-                    horizontalMargin = horizontalMarginDp,
-                    verticalMargin = verticalMarginDp,
-                    // A fixed zoom *number* has to be translated too: Google's 17 shows a third of the
-                    // ground osmdroid's 17 shows. See [fitZoomFor].
-                    singleStopZoom = SINGLE_STOP_ZOOM - densityZoomOffset(densityScale),
-                )
-                Log.i(
-                    TAG,
-                    "Google fit: view=${mapSize.width}x${mapSize.height} " +
-                        "(${mapSize.width / densityScale}x${mapSize.height / densityScale} dp) " +
-                        "padX=${horizontalMarginDp}dp padY=${verticalMarginDp}dp " +
-                        "targets=${fitTargets.size} -> ${fit.lat},${fit.lng} z=${fit.zoom}",
+                    widthPx = mapSize.width / density,
+                    heightPx = mapSize.height / density,
+                    paddingPx = (
+                        if (focusStops != null) GOOGLE_FOCUS_PADDING_DP else GOOGLE_FIT_PADDING_DP
+                        ).toFloat(),
                 )
                 map.moveCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(fit.lat, fit.lng), fit.zoom.toFloat()),
-                )
-                // What the engine actually rendered at, rather than what was asked for: the visible
-                // region is ground truth for whether the whole box really landed on screen.
-                val bounds = map.projection.visibleRegion.latLngBounds
-                Log.i(
-                    TAG,
-                    "Google camera now: ${map.cameraPosition.target} z=${map.cameraPosition.zoom}" +
-                        " visible=${bounds.southwest}..${bounds.northeast}",
                 )
             }
         }
@@ -871,75 +809,6 @@ private fun GoogleTourMap(
 private data class CameraFit(val lat: Double, val lng: Double, val zoom: Double)
 
 /**
- * Room the fit has to leave clear, per axis, in device pixels.
- *
- * Per axis, because what has to stay clear is not the same on each. A numbered pin is a square
- * bitmap anchored at its bottom centre, so the whole pin stands *above* the stop it marks and the top
- * of the view needs a pin's height, while the bottom of the view only needs room for the engine's own
- * logo and attribution. Horizontally the pin needs half its width either side, and nothing else is in
- * the way.
- *
- * One margin for both axes is what broke this map. The 200 px the overview used was small enough for
- * the width — which was never the limit — and still large enough to cost the overview a whole zoom
- * level on the height; the 420 px the stop page used to clear its chips ate more than the entire
- * height of the hero, which is what forced a 25% floor on the usable height to stop the fit
- * collapsing. A clamp that hides a constraint is worse than the constraint itself: that floor let the
- * width alone decide the stop page's zoom. Sizing each axis to what is actually in the way removes
- * the need for any floor.
- */
-private data class FitMargins(
-    /** Per side, left and right. */
-    val horizontalPx: Int,
-    /**
-     * Per side, top and bottom — the larger of the two real needs, used on both sides. One camera
-     * centre cannot be offset for two different margins, so the box stays centred instead, which is
-     * one thing both engines agree on.
-     */
-    val verticalPx: Int,
-    /** The strip the app's own chips actually cover, or 0 where nothing is drawn over the map. */
-    val topStripPx: Int,
-    /** The strip the engine's logo and attribution actually cover. */
-    val bottomStripPx: Int,
-)
-
-/**
- * Measures, once per density, how much room the fit has to leave clear. See [FitMargins].
- *
- * @param focusStops the stops a stop page asked to frame, or null for the whole-route overview. A
- *   focus request is also the signal that this is the map inside `StopHero`, with the Photo/Map chips
- *   drawn over its top corner — the only view that has anything over the map besides the engine's own
- *   chrome.
- */
-@Composable
-private fun rememberFitMargins(focusStops: List<StopEntity>?): FitMargins {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    // The pin is a fixed-size bitmap with no density of its own, so its clearance is in device pixels
-    // — and it is measured from the icon rather than restated, so redrawing the icon moves the margin
-    // with it.
-    val pinPx = remember(context) {
-        numberedMarkerIcon(context, 1, AndroidColor.BLACK, false)
-            .intrinsicWidth
-            .takeIf { it > 0 } ?: PIN_FALLBACK_PX
-    }
-    val focused = focusStops != null
-    return remember(pinPx, density.density, focused) {
-        val gapPx = with(density) { MARKER_GAP_DP.dp.roundToPx() }
-        val attributionPx = with(density) { ATTRIBUTION_STRIP_DP.dp.roundToPx() }
-        val chipsPx = if (focused) with(density) { HERO_CHIPS_STRIP_DP.dp.roundToPx() } else 0
-        // Top: the pin stands its whole height above its stop, and on a stop page it stands under the
-        // chips. Bottom: the pin sits *on* its stop, so only the logo and attribution are down there.
-        val abovePx = chipsPx + pinPx
-        FitMargins(
-            horizontalPx = pinPx / 2 + gapPx,
-            verticalPx = maxOf(abovePx, attributionPx) + gapPx,
-            topStripPx = chipsPx,
-            bottomStripPx = attributionPx,
-        )
-    }
-}
-
-/**
  * The one camera fit both engines use: the centre of the box [targets] occupy, and the highest
  * integer zoom at which that whole box still fits inside the viewport.
  *
@@ -949,29 +818,21 @@ private fun rememberFitMargins(focusStops: List<StopEntity>?): FitMargins {
  * means the same thing whichever map draws it — and with no routing through osmdroid's
  * `zoomToBoundingBox`, neither engine can hit the ANR that fit caused.
  *
- * The calculation is the same, but the *units* are not, and that is the caller's business: osmdroid
- * passes pixels, Google passes dp. See [fitZoomFor] for why that has to be so.
- *
- * A single stop has no box to fit, so it is centred at a fixed walking zoom instead — and being a
- * fixed zoom *number*, that value is one of the few things that still needs translating per engine.
+ * A single stop has no box to fit, so it is centred at a fixed walking zoom instead.
  *
  * @param targets stops to frame; must not be empty — callers check before fitting.
- * @param width viewport width in the engine's own zoom units.
- * @param height viewport height in the engine's own zoom units.
- * @param horizontalMargin margin to keep clear per side, left and right, in those same units.
- * @param verticalMargin margin to keep clear per side, top and bottom, in those same units.
- * @param singleStopZoom the level a one-stop view opens at, in the engine's own units.
+ * @param widthPx viewport width in device pixels.
+ * @param heightPx viewport height in device pixels.
+ * @param paddingPx air to keep clear on both axes, in device pixels.
  */
 private fun cameraFitFor(
     targets: List<StopEntity>,
-    width: Float,
-    height: Float,
-    horizontalMargin: Float,
-    verticalMargin: Float,
-    singleStopZoom: Double = SINGLE_STOP_ZOOM,
+    widthPx: Float,
+    heightPx: Float,
+    paddingPx: Float,
 ): CameraFit {
     if (targets.size == 1) {
-        return CameraFit(targets[0].lat, targets[0].lng, singleStopZoom)
+        return CameraFit(targets[0].lat, targets[0].lng, SINGLE_STOP_ZOOM)
     }
 
     val box = BoundingBox.fromGeoPoints(targets.map { GeoPoint(it.lat, it.lng) })
@@ -979,14 +840,10 @@ private fun cameraFitFor(
         lat = (box.latNorth + box.latSouth) / 2.0,
         lng = (box.lonEast + box.lonWest) / 2.0,
         zoom = fitZoomFor(
-            north = box.latNorth,
-            south = box.latSouth,
-            east = box.lonEast,
-            west = box.lonWest,
-            width = width,
-            height = height,
-            horizontalMargin = horizontalMargin,
-            verticalMargin = verticalMargin,
+            box = box,
+            widthPx = widthPx,
+            heightPx = heightPx,
+            paddingPx = paddingPx,
         ),
     )
 }
@@ -1073,58 +930,30 @@ private fun mercatorY(latDegrees: Double): Double {
 }
 
 /**
- * The zoom levels a Google camera sits below osmdroid's for the same ground scale on this device:
- * `log2(density)`, and zero on osmdroid. Only fixed zoom *numbers* need it — the box fit is already
- * computed in the engine's own units. See [fitZoomFor].
- */
-private fun densityZoomOffset(density: Float): Double = ln(density.toDouble()) / ln(2.0)
-
-/**
- * Largest integer zoom at which the given latitude/longitude box fits inside the viewport.
+ * Largest integer zoom at which the given latitude/longitude box fits inside the viewport, less
+ * [paddingPx] of air on both axes.
  *
  * This replaces osmdroid's `zoomToBoundingBox`, which can spin the main thread indefinitely: every
  * value here is derived arithmetically, so there is no loop that can fail to terminate.
  *
- * Both engines draw Web Mercator with 256-unit tiles, so this one formula serves both — but they do
- * not count the same units, and that is the whole reason the two maps disagreed. osmdroid's zoom is
- * a function of the map view in *device pixels*, so at zoom z its world is `256 * 2^z` px. The Google
- * Maps Android SDK ties zoom to *density-independent* pixels, so at the same zoom its world is
- * `256 * 2^z * density` px — 1.585 levels closer on the owner's 480 dpi phone, which is three times
- * the ground scale.
+ * The viewport and the padding are in device pixels, which is the unit osmdroid's zoom is defined
+ * against and what the map view measures itself in.
  *
- * That is measured, not assumed. Two stops 0.001628° of longitude apart render 113.7 px apart on
- * that phone at camera zoom 15, where `256 * 2^15 * 3 * 0.001628 / 360 = 113.8`, and 151.0 px apart
- * on the 420 dpi emulator's osmdroid map at zoom 17, where `256 * 2^17 * 0.001628 / 360 = 151.7`.
- * Feeding Google a level computed in osmdroid's pixels therefore asked for a view 1.585 levels too
- * close: the fourteen-stop box needs 372 px of height at zoom 15 in osmdroid's pixels, so 1116 px
- * under Google on that phone, inside an 840 px hero — and the outer stops fell off the map. That is
- * the reported "too zoomed in, not all stops showing".
- *
- * So the caller converts instead of sharing: osmdroid hands this function pixels and a pixel margin,
- * Google hands it dp and a dp margin. One formula, two unit systems, no constant pretending that the
- * two engines measure the same thing.
- *
- * @param width viewport width in the caller's units.
- * @param height viewport height in the caller's units.
- * @param horizontalMargin margin to keep clear per side, in the same units.
- * @param verticalMargin margin to keep clear per side, in the same units.
+ * @param widthPx viewport width in device pixels.
+ * @param heightPx viewport height in device pixels.
+ * @param paddingPx air to keep clear on both axes, in device pixels.
  */
 private fun fitZoomFor(
     north: Double,
     south: Double,
     east: Double,
     west: Double,
-    width: Float,
-    height: Float,
-    horizontalMargin: Float,
-    verticalMargin: Float,
+    widthPx: Float,
+    heightPx: Float,
+    paddingPx: Float,
 ): Double {
-    // A one-unit floor keeps the logarithms finite should a caller ever pass a margin wider than its
-    // viewport. It is not a clamp on the fit: the margins are sized to real pins and real chrome, so
-    // they cannot come close, and the 25% floor this replaces is exactly what hid the vertical
-    // constraint on the stop page and let the width alone choose its zoom.
-    val usableWidth = (width - 2 * horizontalMargin).coerceAtLeast(1f)
-    val usableHeight = (height - 2 * verticalMargin).coerceAtLeast(1f)
+    val usableWidth = (widthPx - 2 * paddingPx).coerceAtLeast(widthPx * MIN_USABLE_FRACTION.toFloat())
+    val usableHeight = (heightPx - 2 * paddingPx).coerceAtLeast(heightPx * MIN_USABLE_FRACTION.toFloat())
 
     val spanX = abs(mercatorX(east) - mercatorX(west)).coerceAtLeast(1e-9)
     val spanY = abs(mercatorY(south) - mercatorY(north)).coerceAtLeast(1e-9)
@@ -1135,6 +964,22 @@ private fun fitZoomFor(
     val zoom = floor(min(zoomForWidth, zoomForHeight))
     return zoom.coerceIn(2.0, 19.0)
 }
+
+/** Convenience overload of [fitZoomFor] for a box that has already been built. */
+private fun fitZoomFor(
+    box: BoundingBox,
+    widthPx: Float,
+    heightPx: Float,
+    paddingPx: Float,
+): Double = fitZoomFor(
+    north = box.latNorth,
+    south = box.latSouth,
+    east = box.lonEast,
+    west = box.lonWest,
+    widthPx = widthPx,
+    heightPx = heightPx,
+    paddingPx = paddingPx,
+)
 
 /**
  * The "you are here" dot, drawn the way map apps do it: a soft accuracy halo, a white ring, a solid

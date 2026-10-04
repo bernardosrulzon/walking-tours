@@ -569,8 +569,19 @@ fun StopScreen(
                                         // Past the introduction, then straight to the first stop:
                                         // someone skipping it wants to be walking, and leaving them on
                                         // "no current stop" would present a different dead end.
-                                        session.skipIntroduction()
-                                        allStops.firstOrNull()?.let { session.playStop(it.id) }
+                                        val firstStop = allStops.firstOrNull()
+                                        if (firstStop != null) {
+                                            if (isLive) {
+                                                session.skipIntroduction()
+                                                session.playStop(firstStop.id)
+                                            } else {
+                                                // Browsing, so this is the walker setting off.
+                                                // playStop with nothing running answers from wherever
+                                                // they happen to be standing, which put them on whatever
+                                                // stop was nearest instead of the first one.
+                                                session.startTour(tourId, firstStop.id)
+                                            }
+                                        }
                                         // The walker is moving on by hand, so the landing a resume does
                                         // must not snap them back to wherever the session has got to.
                                         didInitialScroll = true

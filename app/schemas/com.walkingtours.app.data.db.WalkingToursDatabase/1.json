@@ -1,0 +1,315 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "be8f08753793b419b8aaa685dcdb7f35",
+    "entities": [
+      {
+        "tableName": "tours",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `city` TEXT NOT NULL, `country` TEXT NOT NULL, `summary` TEXT NOT NULL, `overviewText` TEXT NOT NULL, `distanceKm` REAL NOT NULL, `totalWalkMinutes` INTEGER NOT NULL, `difficulty` TEXT NOT NULL, `bestTimeOfDay` TEXT NOT NULL, `heroImage` TEXT, `imageCredits` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "city",
+            "columnName": "city",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "country",
+            "columnName": "country",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "summary",
+            "columnName": "summary",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "overviewText",
+            "columnName": "overviewText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceKm",
+            "columnName": "distanceKm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalWalkMinutes",
+            "columnName": "totalWalkMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "difficulty",
+            "columnName": "difficulty",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bestTimeOfDay",
+            "columnName": "bestTimeOfDay",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "heroImage",
+            "columnName": "heroImage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "imageCredits",
+            "columnName": "imageCredits",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "stops",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tourId` TEXT NOT NULL, `order` INTEGER NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `lat` REAL NOT NULL, `lng` REAL NOT NULL, `narration` TEXT NOT NULL, `suggestedMinutes` INTEGER NOT NULL, `entranceFeeTry` TEXT NOT NULL, `entranceFeeNote` TEXT NOT NULL, `isFree` INTEGER NOT NULL, `openingHours` TEXT NOT NULL, `accessibility` TEXT NOT NULL, `insiderTip` TEXT NOT NULL, `nextStopDirections` TEXT NOT NULL, `photoAsset` TEXT, `photoAttribution` TEXT, `triggerRadiusMeters` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`tourId`) REFERENCES `tours`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tourId",
+            "columnName": "tourId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "order",
+            "columnName": "order",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lng",
+            "columnName": "lng",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "narration",
+            "columnName": "narration",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "suggestedMinutes",
+            "columnName": "suggestedMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entranceFeeTry",
+            "columnName": "entranceFeeTry",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entranceFeeNote",
+            "columnName": "entranceFeeNote",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFree",
+            "columnName": "isFree",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openingHours",
+            "columnName": "openingHours",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessibility",
+            "columnName": "accessibility",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "insiderTip",
+            "columnName": "insiderTip",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextStopDirections",
+            "columnName": "nextStopDirections",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "photoAsset",
+            "columnName": "photoAsset",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "photoAttribution",
+            "columnName": "photoAttribution",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "triggerRadiusMeters",
+            "columnName": "triggerRadiusMeters",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_stops_tourId",
+            "unique": false,
+            "columnNames": [
+              "tourId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stops_tourId` ON `${TABLE_NAME}` (`tourId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "tours",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tourId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "stop_progress",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tourId` TEXT NOT NULL, `stopId` TEXT NOT NULL, `visitedAtEpochMs` INTEGER NOT NULL, `audioCompleted` INTEGER NOT NULL, PRIMARY KEY(`tourId`, `stopId`))",
+        "fields": [
+          {
+            "fieldPath": "tourId",
+            "columnName": "tourId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stopId",
+            "columnName": "stopId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visitedAtEpochMs",
+            "columnName": "visitedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "audioCompleted",
+            "columnName": "audioCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "tourId",
+            "stopId"
+          ]
+        }
+      },
+      {
+        "tableName": "tour_progress",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tourId` TEXT NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `lastStopId` TEXT, `completedAtEpochMs` INTEGER, PRIMARY KEY(`tourId`))",
+        "fields": [
+          {
+            "fieldPath": "tourId",
+            "columnName": "tourId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMs",
+            "columnName": "startedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastStopId",
+            "columnName": "lastStopId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "completedAtEpochMs",
+            "columnName": "completedAtEpochMs",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "tourId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'be8f08753793b419b8aaa685dcdb7f35')"
+    ]
+  }
+}

@@ -86,14 +86,23 @@ private val FORCE_FALLBACK_MAP = false
 private const val SINGLE_STOP_ZOOM = 17.0
 
 /** Air kept clear on both axes when the whole route is framed, in device pixels. */
-private const val FIT_PADDING_PX = 90
+/**
+ * Air around the framed box, per axis and in viewport units.
+ *
+ * Horizontal is the larger of the two because it is also what keeps a badge from being clipped:
+ * a badge is anchored centrally across its width, so it reaches half a badge sideways but its whole
+ * height upwards. Vertical air is small; [MARKER_SIZE_PX] already reserves the top.
+ */
+private const val FIT_PADDING_X_PX = 60
+private const val FIT_PADDING_Y_PX = 16
 
 /**
  * Air kept clear on both axes when a stop page frames the current stop and the next one, in device
- * pixels. Larger than [FIT_PADDING_PX] because the hero map is a much shorter viewport and carries
+ * pixels. Larger than [FIT_PADDING_X_PX] because the hero map is a much shorter viewport and carries
  * the Photo/Map chips over its top corner.
  */
-private const val FOCUS_PADDING_PX = 90
+private const val FOCUS_PADDING_X_PX = 60
+private const val FOCUS_PADDING_Y_PX = 16
 
 /**
  * Google's own margins, in **dp**, deliberately separate from the two above.
@@ -104,10 +113,12 @@ private const val FOCUS_PADDING_PX = 90
  * fourteen-stop overview cropped to eight stops. Measuring Google's viewport and margins in dp puts
  * the fit in the same space the SDK defines its zoom in, which is why these are not shared.
  */
-private const val GOOGLE_FIT_PADDING_DP = 32
+private const val GOOGLE_FIT_PADDING_X_DP = 32
+private const val GOOGLE_FIT_PADDING_Y_DP = 10
 
-/** See [GOOGLE_FIT_PADDING_DP]. Larger because a stop-page hero is a much shorter viewport. */
-private const val GOOGLE_FOCUS_PADDING_DP = 56
+/** See [GOOGLE_FIT_PADDING_X_DP]. Larger because a stop-page hero is a much shorter viewport. */
+private const val GOOGLE_FOCUS_PADDING_X_DP = 32
+private const val GOOGLE_FOCUS_PADDING_Y_DP = 16
 
 /**
  * The fit never treats an axis as narrower than this fraction of itself. Without it, padding wider
@@ -595,7 +606,8 @@ fun TourMap(
                 targets = fitTargets,
                 widthPx = mapSize.width.toFloat(),
                 heightPx = mapSize.height.toFloat(),
-                paddingPx = (if (focusStops != null) FOCUS_PADDING_PX else FIT_PADDING_PX).toFloat(),
+                paddingX = (if (focusStops != null) FOCUS_PADDING_X_PX else FIT_PADDING_X_PX).toFloat(),
+                paddingY = (if (focusStops != null) FOCUS_PADDING_Y_PX else FIT_PADDING_Y_PX).toFloat(),
                 topInsetPx = MARKER_SIZE_PX,
             )
             mapView.controller.setZoom(fit.zoom)
@@ -723,14 +735,17 @@ private fun GoogleTourMap(
 
             runCatching {
                 // The raw measured viewport, in device pixels, exactly as the osmdroid path uses it.
-                // In dp, not pixels: see GOOGLE_FIT_PADDING_DP. The viewport and the margin must
+                // In dp, not pixels: see GOOGLE_FIT_PADDING_X_DP. The viewport and the margin must
                 // both be in the space the SDK's zoom is defined in.
                 val fit = cameraFitFor(
                     targets = fitTargets,
                     widthPx = mapSize.width / density,
                     heightPx = mapSize.height / density,
-                    paddingPx = (
-                        if (focusStops != null) GOOGLE_FOCUS_PADDING_DP else GOOGLE_FIT_PADDING_DP
+                    paddingX = (
+                        if (focusStops != null) GOOGLE_FOCUS_PADDING_X_DP else GOOGLE_FIT_PADDING_X_DP
+                        ).toFloat(),
+                    paddingY = (
+                        if (focusStops != null) GOOGLE_FOCUS_PADDING_Y_DP else GOOGLE_FIT_PADDING_Y_DP
                         ).toFloat(),
                     // The badge bitmap is 110 device pixels tall; Google measures in dp.
                     topInsetPx = MARKER_SIZE_PX / density,
@@ -848,7 +863,8 @@ private fun cameraFitFor(
     targets: List<StopEntity>,
     widthPx: Float,
     heightPx: Float,
-    paddingPx: Float,
+    paddingX: Float,
+    paddingY: Float,
     topInsetPx: Float = 0f,
 ): CameraFit {
     if (targets.size == 1) {
@@ -862,7 +878,8 @@ private fun cameraFitFor(
         box = box,
         widthPx = widthPx,
         heightPx = heightPx,
-        paddingPx = paddingPx,
+        paddingX = paddingX,
+        paddingY = paddingY,
         topInsetPx = topInsetPx,
     )
     // Reserving the badge height at the top pushes the box down the screen, so the point the camera
@@ -990,14 +1007,15 @@ private fun fitZoomFor(
     west: Double,
     widthPx: Float,
     heightPx: Float,
-    paddingPx: Float,
+    paddingX: Float,
+    paddingY: Float,
     topInsetPx: Float = 0f,
 ): Double {
-    val usableWidth = (widthPx - 2 * paddingPx).coerceAtLeast(widthPx * MIN_USABLE_FRACTION.toFloat())
+    val usableWidth = (widthPx - 2 * paddingX).coerceAtLeast(widthPx * MIN_USABLE_FRACTION.toFloat())
     // The top carries the padding plus the badge height: badges hang upwards, so reserving nothing
     // above the topmost coordinate lets the badge overflow the edge while the bottom margin, which
     // no badge occupies, reads as uneven padding.
-    val usableHeight = (heightPx - 2 * paddingPx - topInsetPx)
+    val usableHeight = (heightPx - 2 * paddingY - topInsetPx)
         .coerceAtLeast(heightPx * MIN_USABLE_FRACTION.toFloat())
 
     val spanX = abs(mercatorX(east) - mercatorX(west)).coerceAtLeast(1e-9)
@@ -1015,7 +1033,8 @@ private fun fitZoomFor(
     box: BoundingBox,
     widthPx: Float,
     heightPx: Float,
-    paddingPx: Float,
+    paddingX: Float,
+    paddingY: Float,
     topInsetPx: Float = 0f,
 ): Double = fitZoomFor(
     north = box.latNorth,
@@ -1024,7 +1043,8 @@ private fun fitZoomFor(
     west = box.lonWest,
     widthPx = widthPx,
     heightPx = heightPx,
-    paddingPx = paddingPx,
+    paddingX = paddingX,
+    paddingY = paddingY,
     topInsetPx = topInsetPx,
 )
 

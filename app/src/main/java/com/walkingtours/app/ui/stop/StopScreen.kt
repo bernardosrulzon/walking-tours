@@ -224,12 +224,15 @@ fun StopScreen(
         if (didInitialScroll || allStops.isEmpty() || pagerState.isScrollInProgress) {
             return@LaunchedEffect
         }
-        if (wantsIntroduction) {
+        if (wantsIntroduction || state.showingOverview) {
             // Wait for the introduction to have a page at all. The tour's text arrives after the
             // stop list, so page zero is still stop one for a moment, and landing then put the
             // walker on stop one and marked the landing done.
             if (introPages == 0) return@LaunchedEffect
-            // The introduction is what was asked for, so land on it and do not follow the session.
+            // The introduction is what belongs on screen: either it was opened deliberately, or it
+            // is playing because a walk has just begun. Following the stop named by the route would
+            // slide straight past it — pressing Start tour starts at stop one, whose page is now one
+            // past the introduction.
             didInitialScroll = true
             pagerState.scrollToPage(0)
             return@LaunchedEffect
@@ -257,6 +260,19 @@ fun StopScreen(
         // asked for, so go there rather than preserving a stop they never chose.
         val target = if (state.showingOverview || wantsIntroduction) 0 else pagerState.currentPage + delta
         pagerState.scrollToPage(target.coerceIn(0, pagerState.pageCount - 1))
+    }
+
+    // For as long as the introduction is playing, page zero is what belongs on screen.
+    //
+    // Its own effect rather than a clause in the ones above, because the ordering is not guaranteed:
+    // the introduction page is inserted as soon as the tour's text loads, which can be a moment
+    // before the session starts narrating. Renumbering then carried the walker onto stop one, and
+    // once the landing was marked done nothing moved them back.
+    LaunchedEffect(state.showingOverview, introPages) {
+        if (state.showingOverview && introPages > 0) {
+            didInitialScroll = true
+            if (pagerState.currentPage != 0) pagerState.scrollToPage(0)
+        }
     }
 
     // On the resume route the screen belongs to the session: when the walker reaches the next stop

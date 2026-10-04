@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -350,7 +351,13 @@ fun StopScreen(
                 val previous = allStops.getOrNull(pageIndex - 1)
                 val nextInRoute = allStops.getOrNull(pageIndex + 1)
 
+                // Held explicitly so the introduction's Next can scroll this page back to the top.
+                // Page changes reset the scroll on their own because each page is its own list; ending
+                // the introduction does not, since it recomposes the page in place.
+                val listState = rememberLazyListState()
+
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 8.dp),
                 ) {
@@ -490,6 +497,9 @@ fun StopScreen(
                                         // "no current stop" would present a different dead end.
                                         session.skipIntroduction()
                                         allStops.firstOrNull()?.let { session.playStop(it.id) }
+                                        // Land at the top of the stop they asked for, the way moving
+                                        // between stops already does.
+                                        scope.launch { listState.scrollToItem(0) }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {

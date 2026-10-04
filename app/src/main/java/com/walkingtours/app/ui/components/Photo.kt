@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -39,9 +42,19 @@ fun AssetPhoto(
     targetWidthPx: Int = 1080,
 ) {
     val context = LocalContext.current
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, assetPath) {
-        value = assetPath?.let {
-            withContext(Dispatchers.IO) { decodeAsset(context, it, targetWidthPx) }
+    var bitmap by remember(assetPath) { mutableStateOf(AssetPhotoCache[assetPath]) }
+    var unavailable by remember(assetPath) { mutableStateOf(false) }
+
+    LaunchedEffect(assetPath) {
+        val path = assetPath ?: return@LaunchedEffect
+        if (bitmap != null) return@LaunchedEffect
+        unavailable = false
+        val decoded = withContext(Dispatchers.IO) { decodeAsset(context, path, targetWidthPx) }
+        if (decoded != null) {
+            AssetPhotoCache[path] = decoded
+            bitmap = decoded
+        } else {
+            unavailable = true
         }
     }
 
@@ -55,12 +68,41 @@ fun AssetPhoto(
         )
     } else {
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            Text(
-                text = "Photo unavailable",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Only a photograph that is genuinely missing gets a message. The three other states —
+            // no stop yet, a decode in flight, a page whose stop arrived a frame later — all used to
+            // print "Photo unavailable", which read as a fault on every tour start: the stop list
+            // loads asynchronously, so the hero is built with no stop and then given one.
+            if (unavailable) {
+                Text(
+                    text = "Photo unavailable",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+    }
+}
+
+/**
+ * Decoded photographs, keyed by asset path, for the life of the process.
+ *
+ * The tour ships a handful of images and they are decoded once each, so holding them costs a few
+ * megabytes. Without this, every scroll back to a page re-decoded its JPEG, and the delay showed on
+ * screen each time.
+ */
+private object AssetPhotoCache {
+    private const val MAX_ENTRIES = 8
+    private val entries = LinkedHashMap<String, ImageBitmap>()
+
+    @Synchronized
+    operator fun get(path: String?): ImageBitmap? = path?.let { entries[it] }
+
+    @Synchronized
+    operator fun set(path: String, bitmap: ImageBitmap) {
+        if (entries.size >= MAX_ENTRIES) {
+            entries.keys.firstOrNull()?.let { entries.remove(it) }
+        }
+        entries[path] = bitmap
     }
 }
 

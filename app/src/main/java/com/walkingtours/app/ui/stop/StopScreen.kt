@@ -40,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -349,15 +348,6 @@ fun StopScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 8.dp),
                 ) {
-                    if (isLive) {
-                        item {
-                            LinearProgressIndicator(
-                                progress = { state.progressFraction },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-
                     state.locationIssue?.let { issue ->
                         item {
                             Row(

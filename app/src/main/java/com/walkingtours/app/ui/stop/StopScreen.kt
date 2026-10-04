@@ -402,11 +402,40 @@ fun StopScreen(
                             // Frame this stop and the next one rather than the entire route: the useful
                             // question on a stop page is "where do I go next", not "where does this walk
                             // go in total".
-                            focusStops = listOfNotNull(pageStop, nextInRoute),
+                            // The whole route while the introduction plays: there is no "next stop"
+                            // yet, and the tour as a whole is what the introduction is about.
+                            focusStops = if (noStopYet) null else listOfNotNull(pageStop, nextInRoute),
                             heroHeight = 240.dp,
                             // Walking: the map is what you need. Browsing: the photograph is.
                             initialPage = if (isLive) 1 else 0,
                         )
+                    }
+
+                    // ---- Skipping the introduction ------------------------------------------------
+                    // Directly under the hero, not after the introduction text: as an item further
+                    // down it fell below the fold, so it never composed and there was no way past
+                    // the introduction without listening to all of it.
+                    if (state.showingOverview) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                                horizontalArrangement = Arrangement.End,
+                            ) {
+                                Button(
+                                    onClick = {
+                                        // Past the introduction, then straight to the first stop:
+                                        // someone skipping it wants to be walking, and leaving them on
+                                        // "no current stop" would just present a different dead end.
+                                        session.skipIntroduction()
+                                        allStops.firstOrNull()?.let { session.playStop(it.id) }
+                                    },
+                                ) {
+                                    Text("Next")
+                                }
+                            }
+                        }
                     }
 
                     // ---- The city introduction, while it plays -------------------------------------
@@ -736,7 +765,7 @@ fun StopScreen(
                     // the one state that has no stop to show.
                     if (pageStop == null) {
                         item {
-                            Column(Modifier.padding(24.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(24.dp)) {
                                 Text(
                                     text = "Getting your tour ready\u2026",
                                     style = MaterialTheme.typography.bodyMedium,

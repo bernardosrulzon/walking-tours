@@ -343,6 +343,14 @@ class TourSessionManager(
     }
 
     /**
+     * Ends the city introduction early, for the Next button on the introduction.
+     *
+     * Same path as the introduction finishing on its own, so skipping it hands control to the
+     * geofences and evaluates the walker's position exactly as waiting would have.
+     */
+    fun skipIntroduction() = endOverview()
+
+    /**
      * Once the introduction finishes, hand control to the geofences and immediately evaluate the
      * walker's current position, so someone who pressed Start while already standing at stop one
      * still gets its narration without having to walk out of range and back.

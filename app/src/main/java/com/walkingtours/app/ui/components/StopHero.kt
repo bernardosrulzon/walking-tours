@@ -37,6 +37,14 @@ import kotlinx.coroutines.launch
 fun StopHero(
     stop: StopEntity?,
     stops: List<StopEntity>,
+    /**
+     * Shown when there is no current stop — during the city introduction, before the walk begins.
+     *
+     * The tour's own photograph is the honest thing to put there: it is what the walker just tapped
+     * on to get here, and the alternative was an empty panel held for as long as the introduction
+     * runs.
+     */
+    fallbackPhotoAsset: String? = null,
     visitedIds: Set<String>,
     userLat: Double?,
     userLng: Double?,
@@ -65,7 +73,7 @@ fun StopHero(
             if (page == 0) {
                 Box(Modifier.fillMaxSize()) {
                     AssetPhoto(
-                        assetPath = stop?.photoAsset,
+                        assetPath = stop?.photoAsset ?: fallbackPhotoAsset,
                         contentDescription = stop?.name,
                         modifier = Modifier.fillMaxSize(),
                     )

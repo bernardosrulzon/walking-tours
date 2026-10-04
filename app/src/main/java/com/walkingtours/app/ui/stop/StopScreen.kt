@@ -141,6 +141,12 @@ fun StopScreen(
         repository.ensureContentLoaded()
         value = repository.getStops(tourId)
     }
+
+    // The tour's own photograph, for the hero while no stop is current.
+    val tourHeroImage by produceState(initialValue = null as String?, tourId) {
+        repository.ensureContentLoaded()
+        value = repository.getTour(tourId)?.heroImage
+    }
     val stopProgress by remember(tourId) { repository.observeStopProgress(tourId) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val visitedIds = stopProgress.map { it.stopId }.toSet()
@@ -386,6 +392,7 @@ fun StopScreen(
                         StopHero(
                             stop = pageStop,
                             stops = if (isLive) state.stops else allStops,
+                            fallbackPhotoAsset = tourHeroImage,
                             visitedIds = visitedIds,
                             userLat = mapLat,
                             userLng = mapLng,

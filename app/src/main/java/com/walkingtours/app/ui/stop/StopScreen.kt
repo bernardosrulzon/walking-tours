@@ -411,33 +411,6 @@ fun StopScreen(
                         )
                     }
 
-                    // ---- Skipping the introduction ------------------------------------------------
-                    // Directly under the hero, not after the introduction text: as an item further
-                    // down it fell below the fold, so it never composed and there was no way past
-                    // the introduction without listening to all of it.
-                    if (state.showingOverview) {
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                                horizontalArrangement = Arrangement.End,
-                            ) {
-                                Button(
-                                    onClick = {
-                                        // Past the introduction, then straight to the first stop:
-                                        // someone skipping it wants to be walking, and leaving them on
-                                        // "no current stop" would just present a different dead end.
-                                        session.skipIntroduction()
-                                        allStops.firstOrNull()?.let { session.playStop(it.id) }
-                                    },
-                                ) {
-                                    Text("Next")
-                                }
-                            }
-                        }
-                    }
-
                     // ---- The city introduction, while it plays -------------------------------------
                     if (state.showingOverview && state.overviewText.isNotBlank()) {
                         item {
@@ -496,6 +469,31 @@ fun StopScreen(
                                         highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
+                                }
+                            }
+                        }
+                    }
+
+                    // ---- Skipping the introduction ------------------------------------------------
+                    // At the end of the page and in the stop footer's style: a Column with the same
+                    // 16 dp inset, a divider, and a full-width button. The introduction runs for
+                    // minutes, so there has to be a way past it.
+                    if (state.showingOverview) {
+                        item {
+                            Column(Modifier.padding(16.dp)) {
+                                HorizontalDivider()
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        // Past the introduction, then straight to the first stop:
+                                        // someone skipping it wants to be walking, and leaving them on
+                                        // "no current stop" would present a different dead end.
+                                        session.skipIntroduction()
+                                        allStops.firstOrNull()?.let { session.playStop(it.id) }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Next")
                                 }
                             }
                         }
@@ -757,20 +755,6 @@ fun StopScreen(
                                     }
                                 }
 
-                            }
-                        }
-                    }
-
-                    // A page with no stop is either still loading, or the introduction is playing, which is
-                    // the one state that has no stop to show.
-                    if (pageStop == null) {
-                        item {
-                            Column(Modifier.fillMaxWidth().padding(24.dp)) {
-                                Text(
-                                    text = "Getting your tour ready\u2026",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
                             }
                         }
                     }

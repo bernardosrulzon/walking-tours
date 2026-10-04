@@ -145,7 +145,7 @@ private const val TILE_SIZE_PX = 256.0
  * coordinate it names. The fit has to reserve that height or the top badge overflows the viewport
  * while an equal-looking gap is left empty at the bottom.
  */
-private const val MARKER_SIZE_PX = 110f
+private const val MARKER_SIZE_PX = 80f
 
 /** Equatorial circumference, for converting zoom levels to ground distances. */
 private const val EARTH_CIRCUMFERENCE_M = 40_075_016.686

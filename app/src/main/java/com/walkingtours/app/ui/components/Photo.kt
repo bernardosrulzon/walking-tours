@@ -147,8 +147,11 @@ fun numberedMarkerIcon(
     // silent northward offset on the map: the previous 8 px inset put every stop roughly 7 m from
     // the place it names at zoom 17. Sizing the circle to the bitmap removes it, so the bottom edge
     // of the ring sits exactly on the coordinate.
-    val size = 110
-    val strokeWidth = 7f
+    // 110 -> 80, with the ring and the number scaled by the same factor (7 -> 5, 52 -> 38) so the
+    // proportions are unchanged: the badge is smaller, not thinner or more crowded. The ring still
+    // meets the bitmap edge, which is what keeps the bottom of the badge on its coordinate.
+    val size = 80
+    val strokeWidth = 5f
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val radius = size / 2f - strokeWidth / 2f
@@ -164,7 +167,7 @@ fun numberedMarkerIcon(
 
     paint.style = Paint.Style.FILL
     paint.color = android.graphics.Color.WHITE
-    paint.textSize = 52f
+    paint.textSize = 38f
     paint.textAlign = Paint.Align.CENTER
     paint.isFakeBoldText = true
     val label = if (visited) "✓" else number.toString()

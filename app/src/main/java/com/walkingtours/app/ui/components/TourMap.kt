@@ -38,10 +38,8 @@ import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker as GoogleMarker
 import com.google.maps.android.compose.Polyline as GooglePolyline
@@ -197,15 +195,6 @@ private const val ROUTE_WIDTH = 10f
 
 private const val ROUTE_CASING_WIDTH = 18f
 
-/**
- * Hides Google's own points of interest.
- *
- * This is the Google equivalent of choosing Esri's Light Gray Canvas for the osmdroid map: the
- * default style bakes hotel, restaurant and shop pins into the map, and on a walking tour they
- * compete with the numbered stops, which are the only markers that matter. Streets, water and place
- * names are untouched.
- */
-private const val HIDE_POIS_STYLE = """[{"featureType":"poi","stylers":[{"visibility":"off"}]}]"""
 
 /**
  * Holds the osmdroid [MapView] and keeps the gesture stream to itself.
@@ -712,7 +701,6 @@ private fun GoogleTourMap(
             .clipToBounds()
             .onSizeChanged { mapSize = it },
         cameraPositionState = cameraPositionState,
-        properties = MapProperties(mapStyleOptions = MapStyleOptions(HIDE_POIS_STYLE)),
         // osmdroid's zoom buttons are hidden and the app draws its own position dot, so Google's
         // equivalents — including the "open in Google Maps" toolbar — would be new clutter. Every
         // gesture is left at its default of enabled.

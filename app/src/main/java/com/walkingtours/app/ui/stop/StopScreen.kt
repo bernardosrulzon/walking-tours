@@ -514,15 +514,15 @@ fun StopScreen(
                                         },
                                         onRewind = { session.skipNarrationBy(-15_000) },
                                         onForward = { session.skipNarrationBy(15_000) },
-                                        onPrevious = {},
-                                        onNext = {
-                                            // The transport's next is the pager's next page: moving on
-                                            // slides the neighbouring stop in rather than pushing a screen.
-                                            val targetPage = state.nextStop?.let { next ->
-                                                allStops.indexOfFirst { stop -> stop.id == next.id }
-                                            } ?: -1
-                                            if (targetPage >= 0) moveToPage(targetPage + introPages)
-                                        },
+                                        // The neighbouring page, exactly as on a stop page. It used to
+                                        // ask the session for state.nextStop, but during the
+                                        // introduction there is no current stop for that to be
+                                        // relative to, so it answered with whatever stop came next in
+                                        // its own bookkeeping and the button jumped deep into the
+                                        // tour — stop nine, in the owner's case. On the introduction,
+                                        // "next" can only mean the page after it.
+                                        onPrevious = { moveToPage(page - 1) },
+                                        onNext = { moveToPage(page + 1) },
                                         onSeekFraction = { fraction ->
                                             session.seekNarrationTo((fraction * narration.durationMs).toLong())
                                         },

@@ -220,11 +220,15 @@ fun StopScreen(
     // walker's own swiping is in charge — and while resuming it waits for the session to name a
     // stop rather than yanking the pager to the first page and staying there.
     var didInitialScroll by remember { mutableStateOf(false) }
-    LaunchedEffect(allStops, stopId, state.currentStopId) {
+    LaunchedEffect(allStops, stopId, state.currentStopId, introPages) {
         if (didInitialScroll || allStops.isEmpty() || pagerState.isScrollInProgress) {
             return@LaunchedEffect
         }
         if (wantsIntroduction) {
+            // Wait for the introduction to have a page at all. The tour's text arrives after the
+            // stop list, so page zero is still stop one for a moment, and landing then put the
+            // walker on stop one and marked the landing done.
+            if (introPages == 0) return@LaunchedEffect
             // The introduction is what was asked for, so land on it and do not follow the session.
             didInitialScroll = true
             pagerState.scrollToPage(0)
@@ -248,7 +252,10 @@ fun StopScreen(
         val delta = introPages - introPagesSeen
         introPagesSeen = introPages
         if (delta == 0 || pagerState.pageCount == 0) return@LaunchedEffect
-        val target = if (state.showingOverview) 0 else pagerState.currentPage + delta
+        // Inserting the page renumbers the stops, so normally the walker is carried with the stop
+        // they were looking at. Reading the introduction is the exception: page zero is what they
+        // asked for, so go there rather than preserving a stop they never chose.
+        val target = if (state.showingOverview || wantsIntroduction) 0 else pagerState.currentPage + delta
         pagerState.scrollToPage(target.coerceIn(0, pagerState.pageCount - 1))
     }
 

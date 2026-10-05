@@ -96,7 +96,12 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                     onRequestLocationPermission()
                     navController.navigate(Routes.resumeTouring(tourId))
                 },
-                onOpenStop = { stopId -> navController.navigate(Routes.stop(tourId, stopId)) },
+                // Tapping a stop begins the walk there rather than opening it for reading: the
+                // session turns a named start stop into a real arrival, arms the geofences and
+                // records progress, which is what "join at this stop" always meant. With a walk
+                // already running the session is left alone and the stop simply becomes current,
+                // because the settled page is what makes a stop current on a running tour.
+                onOpenStop = { stopId -> navController.navigate(Routes.resumeTouring(tourId, stopId)) },
                 onOpenIntroduction = { navController.navigate(Routes.resumeTouring(tourId, Routes.INTRO)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )

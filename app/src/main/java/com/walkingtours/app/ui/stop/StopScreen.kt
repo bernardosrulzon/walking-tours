@@ -283,6 +283,10 @@ fun StopScreen(
     // when a stop arrives, and the introduction page comes and goes underneath this effect.
     LaunchedEffect(isResume, allStops, introPages) {
         if (!isResume) return@LaunchedEffect
+        // Reading the introduction is the walker's own choice of page, and it outranks the session:
+        // with a walk already running the session always has a stop to name, so following it dragged
+        // them straight off the introduction and onto stop one every time.
+        if (wantsIntroduction) return@LaunchedEffect
         snapshotFlow { state.currentStopId }.collect { id ->
             if (!didInitialScroll) return@collect
             val stopIndex = allStops.indexOfFirst { it.id == id }

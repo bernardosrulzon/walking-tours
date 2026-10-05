@@ -130,6 +130,15 @@ private const val GOOGLE_FOCUS_PADDING_X_DP = 32
 private const val GOOGLE_FOCUS_PADDING_Y_DP = 16
 
 /**
+ * How long a map waits before its engine is built, in milliseconds.
+ *
+ * A little longer than the host's transitions take (300 ms), so that the heaviest thing on these
+ * screens is never built while the screen is moving. The map's place is held by an empty panel of
+ * its own size in the meantime.
+ */
+private const val MAP_SETTLE_MS = 340L
+
+/**
  * How long the Google map has to attach before it is shown regardless.
  *
  * The map is held back until then because the SDK's own view is on screen for the frames it spends
@@ -329,7 +338,22 @@ fun TourMap(
     // when the stops arrive a moment later. The alternative on the Google path was a map created
     // without a camera, which paints the whole planet at (0, 0) until one reaches it.
     val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    if (fitTargets.isEmpty()) {
+
+    // And held back until the screen has stopped moving.
+    //
+    // Building a map — a Google map above all — is the heaviest work on these screens, and doing it
+    // inside a navigation was measured here at double the jank and quarter-second hitches: the work
+    // lands in the middle of the slide, which is exactly when a dropped frame is visible. The
+    // routes into these screens take 300 ms (see WalkingToursNavHost), so the engine is built a
+    // little after that, and the empty panel holds its place in the meantime. Nothing is lost by
+    // waiting; the movement stays smooth.
+    var mapSettled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(MAP_SETTLE_MS)
+        mapSettled = true
+    }
+
+    if (fitTargets.isEmpty() || !mapSettled) {
         Box(modifier.clipToBounds())
         return
     }
@@ -375,7 +399,6 @@ fun TourMap(
     )
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     // The stops this map frames — already established above; a stop page asks for the stop you are
     // on and the one you walk to next, everywhere else the whole route.
@@ -421,6 +444,7 @@ fun TourMap(
 
     // osmdroid pauses tile loading when the map is not visible; hook it into the Compose lifecycle
     // so it stops fetching tiles in the background and resumes correctly on return.
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {

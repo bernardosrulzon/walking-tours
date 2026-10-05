@@ -661,60 +661,6 @@ fun StopScreen(
                             }
                         }
 
-                        // Onward directions exist twice over: the curated text from the content, and the
-                        // live distance when we actually know where the walker is.
-                        current.nextStopDirections.takeIf { it.isNotBlank() }?.let { directions ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                ),
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.DirectionsWalk,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = if (nextInRoute != null) {
-                                                if (isLive) "Walk to stop ${nextInRoute.order}" else "On to ${nextInRoute.name}"
-                                            } else {
-                                                "Finishing the tour"
-                                            },
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        )
-                                    }
-                                    if (isLive && isCurrentStop) {
-                                        val distance = state.distanceToNextMeters
-                                        val bearing = state.bearingToNextDegrees
-                                        if (distance != null && bearing != null) {
-                                            Spacer(Modifier.height(6.dp))
-                                            Text(
-                                                text = "${Geo.formatDistance(distance)} away to the " +
-                                                    "${Geo.compassDirection(bearing)}, about " +
-                                                    "${Formatters.duration(Geo.walkingMinutes(distance))} on foot",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        text = directions,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    )
-                                }
-                            }
-                        }
-
                         Column(Modifier.padding(16.dp)) {
                             Spacer(Modifier.height(16.dp))
                             HorizontalDivider()

@@ -416,7 +416,8 @@ fun StopScreen(
                         onOpenStop = { tapped -> pageForStop(tapped.id)?.let { moveToPage(it) } },
                         // Frame this stop and the next one rather than the entire route: the useful
                         // question on a stop page is "where do I go next", not "where does this walk
-                        // go in total".
+                        // go in total". The same two stops are the line's path, so the page draws one
+                        // leg rather than the whole itinerary.
                         // The whole route while the introduction is what is showing: there is no
                         // "next stop" yet, and the tour as a whole is what the introduction is about.
                         focusStops = if (stopIndex < 0) {
@@ -424,6 +425,9 @@ fun StopScreen(
                         } else {
                             listOfNotNull(pageStop, nextInRoute)
                         },
+                        // The fence is the next stop's: the ground whose arrival the walker is
+                        // walking into. On the introduction there is no next stop to fence.
+                        geofenceStop = if (stopIndex < 0) null else nextInRoute,
                         heroHeight = HERO_HEIGHT,
                         // Walking: the map is what you need. Browsing: the photograph is.
                         initialPage = if (isLive) 1 else 0,

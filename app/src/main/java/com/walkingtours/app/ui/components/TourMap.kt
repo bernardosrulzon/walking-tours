@@ -2,6 +2,7 @@ package com.walkingtours.app.ui.components
 
 import android.content.Context
 import android.graphics.Color as AndroidColor
+import android.graphics.DashPathEffect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.MotionEvent
@@ -9,6 +10,8 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.util.Log
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -21,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -29,6 +33,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -39,10 +44,14 @@ import com.google.android.gms.maps.MapView as GoogleMapView
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Dot
+import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.PatternItem
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapEffect
+import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker as GoogleMarker
 import com.google.maps.android.compose.Polyline as GooglePolyline
@@ -81,6 +90,23 @@ import kotlin.math.tan
  * A plain val rather than a const so it does not trip constant-condition analysis.
  */
 private val FORCE_FALLBACK_MAP = false
+
+/**
+ * Zoom the warm-up map is built at.
+ *
+ * City level: enough that the tiles it fetches are the ones the walk itself will draw on, and no
+ * closer, because it is not being read.
+ */
+private const val WARM_UP_ZOOM = 13.0
+
+/**
+ * How long the warm-up waits for its map to load before giving up and standing down, in
+ * milliseconds.
+ *
+ * Long enough for a slow first load, short enough that a map which never arrives does not sit on the
+ * screen for the rest of the session.
+ */
+private const val WARM_UP_GIVE_UP_MS = 4_000L
 
 /** Zoom used when the route is a single point. */
 private const val SINGLE_STOP_ZOOM = 17.0
@@ -203,16 +229,18 @@ private const val MAX_ACCURACY_RADIUS_METERS = 250f
 private const val ACCURACY_FILL = 0x1A1A73E8
 private const val ACCURACY_STROKE = 0x331A73E8
 
-/** The route blue, shared by both map engines so the line does not change colour with the engine. */
 /**
  * The route line.
  *
- * A mid-blue was almost invisible: the fallback map is pale grey and the Google map goes dark with
- * the system theme, so a muted blue sat at nearly the same value as the background in both. A
- * saturated red is distinct from all three marker colours (blue, teal and the amber "you are here"
- * stop) and reads on light and dark tiles alike.
+ * A desaturated Bosphorus teal, a shade lighter than the visited-stop pin so the two never quite
+ * read as the same thing. The previous red was the loudest element on a map whose whole palette is
+ * Iznik blue, sandstone and sea-green, and it fought the amber "you are here" pin for attention.
+ * This sits inside the palette instead, stays clear of all three marker colours (blue, teal and
+ * amber) at their own lightnesses, and still reads on pale OpenStreetMap tiles and dark Google ones.
+ *
+ * Shared by both map engines so the line does not change colour with the engine.
  */
-private val ROUTE_COLOR = Color(0xFFE53935)
+private val ROUTE_COLOR = Color(0xFF2E8B7D)
 
 /**
  * Drawn under the route, wider, so the line has a light edge wherever it crosses dark tiles — the
@@ -223,6 +251,30 @@ private val ROUTE_CASING_COLOR = Color(0xFFFFFFFF)
 private const val ROUTE_WIDTH = 10f
 
 private const val ROUTE_CASING_WIDTH = 18f
+
+/**
+ * The route is a dotted line rather than a solid one: lighter on the eye over a busy city, and it
+ * makes the leg read as a path to follow rather than a road to drive. The dash is drawn as a round
+ * cap on a near-zero segment, which both engines render as a circular dot; the casing uses the same
+ * gap so its wider dots sit concentrically behind the coloured ones instead of between them.
+ */
+private const val ROUTE_DOT_DASH_PX = 1f
+private const val ROUTE_DOT_GAP_PX = 18f
+
+/** The dot bitmap's ring and centre, in device pixels, matching [drawEndpointDot]. */
+private const val ENDPOINT_DOT_SIZE_PX = 44
+
+/**
+ * The next stop's arrival geofence, drawn as a faint ring around the stop.
+ *
+ * Deliberately quiet: it is orientation, not a boundary to obey, and a walker reading the map wants
+ * the pin and the line first. The hue matches the route so the ring reads as belonging to the walk,
+ * and the alpha keeps it from competing with the route or the blue position dot. Shared by both
+ * engines so the fence looks the same whichever one draws it.
+ */
+private const val GEOFENCE_FILL = 0x142E8B7D
+private const val GEOFENCE_STROKE = 0x4D2E8B7D
+private const val GEOFENCE_STROKE_WIDTH = 3f
 
 
 /**
@@ -301,10 +353,11 @@ private class GestureClaimingMapView(context: Context, options: GoogleMapOptions
  * `BuildConfig.GOOGLE_MAPS_API_KEY` is non-blank the same map is drawn by Google Maps instead, with
  * the real walking line through the stops when Directions allows it.
  *
- * Both paths draw the same numbered pins, the same blue dot with its heading cone, and frame the
- * same stops, so nothing above this composable has to know which engine is in use.
+ * Both paths draw the same numbered pins, the same dotted route line capped by a dot at each end,
+ * the same blue dot with its heading cone, and frame the same stops, so nothing above this
+ * composable has to know which engine is in use.
  *
- * @param stops the full ordered route, used for both the polyline and the numbered pins.
+ * @param stops the full ordered route, used when nothing narrower is asked for.
  * @param visitedIds stops already reached, drawn with a tick.
  * @param userLat/userLng the walker's current fix, shown as a blue dot when present.
  * @param selectedStopId pin to highlight, so tapping a stop in the list moves the map.
@@ -317,11 +370,18 @@ fun TourMap(
     userLat: Double? = null,
     userLng: Double? = null,
     /**
-     * When set, the camera frames these stops instead of the whole route. A stop page uses it to
-     * show the stop you are looking at together with the one you walk to next, which is far easier
-     * to navigate by than the whole fourteen-stop route.
+     * When set, these stops are the whole map: the camera frames them, the line is the route
+     * through them, and they are the only pins drawn. A stop page passes the stop the walker is on
+     * together with the one they walk to next, so the page answers "where do I go next" with one
+     * leg rather than the whole fourteen-stop itinerary. Null draws the entire route instead.
      */
     focusStops: List<StopEntity>? = null,
+
+    /**
+     * When set, draws its geofence as a faint circle, so the walker can see the ground the next
+     * stop's arrival is measured against. Null draws no fence.
+     */
+    geofenceStop: StopEntity? = null,
 
     /** Degrees clockwise from north, from the compass. Draws the heading cone when present. */
     userHeading: Float? = null,
@@ -337,7 +397,19 @@ fun TourMap(
     // of exactly those dimensions: nothing loads, nothing flashes, and the page beneath does not move
     // when the stops arrive a moment later. The alternative on the Google path was a map created
     // without a camera, which paints the whole planet at (0, 0) until one reaches it.
-    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
+    //
+    // These stops are the whole map: the camera's target, the line's path and the only pins drawn.
+    // A stop page hands over the leg it is on — the stop the walker is at and the one they walk to
+    // next — and every other screen hands over the route.
+    val framedStops = focusStops?.takeIf { it.isNotEmpty() } ?: stops
+
+    // A stable identity for [framedStops] across recompositions. The caller builds the focus list
+    // afresh on each pass, so keying effects and remembers on the list itself would re-run them every
+    // recomposition — rebuilding every overlay, and asking the Routes API again. The coordinates are
+    // what the map is actually about, and they only change when the leg does.
+    val routeKey = remember(framedStops) {
+        framedStops.joinToString("|") { "${it.lat},${it.lng}" }
+    }
 
     // And held back until the screen has stopped moving.
     //
@@ -353,7 +425,7 @@ fun TourMap(
         mapSettled = true
     }
 
-    if (fitTargets.isEmpty() || !mapSettled) {
+    if (framedStops.isEmpty() || !mapSettled) {
         Box(modifier.clipToBounds())
         return
     }
@@ -376,6 +448,7 @@ fun TourMap(
             userLat = userLat,
             userLng = userLng,
             focusStops = focusStops,
+            geofenceStop = geofenceStop,
             userHeading = userHeading,
             userAccuracyMeters = userAccuracyMeters,
             selectedStopId = selectedStopId,
@@ -400,8 +473,8 @@ fun TourMap(
 
     val context = LocalContext.current
 
-    // The stops this map frames — already established above; a stop page asks for the stop you are
-    // on and the one you walk to next, everywhere else the whole route.
+    // What this map is about — established above as [framedStops]: a stop page's one leg, or the
+    // whole route everywhere else.
     val mapView = remember {
         MapView(context).apply {
             // A larger tile cache is the cheapest way to make pinch-zoom smooth: zooming in and back
@@ -420,8 +493,8 @@ fun TourMap(
             // a map drawn even once before its fit shows the Gulf of Guinea — and in a pager that is
             // a page full of maps, it did that once per swipe. The exact fit lands during layout,
             // below; this is only so that nothing can ever catch the default.
-            controller.setZoom(initialZoomFor(fitTargets))
-            fitTargets.midpoint()?.let { (lat, lng) -> controller.setCenter(GeoPoint(lat, lng)) }
+            controller.setZoom(initialZoomFor(framedStops))
+            framedStops.midpoint()?.let { (lat, lng) -> controller.setCenter(GeoPoint(lat, lng)) }
         }
     }
 
@@ -461,32 +534,62 @@ fun TourMap(
     }
 
     // Route layer: polyline plus the numbered pins. Rebuilt only when the route or progress changes.
-    DisposableEffect(stops, visitedIds, selectedStopId) {
+    //
+    // Keyed on [routeKey], not on the list: the caller rebuilds the focus list every recomposition,
+    // and keying on it would tear down and rebuild every overlay on each pass.
+    DisposableEffect(routeKey, visitedIds, selectedStopId) {
         mapView.overlays.removeAll(routeOverlays)
         routeOverlays.clear()
 
-        if (stops.isNotEmpty()) {
+        if (framedStops.isNotEmpty()) {
+            val points = framedStops.map { GeoPoint(it.lat, it.lng) }
+            // One dash pattern for both lines, so the casing's wider dots line up behind the coloured
+            // dots rather than weaving between them.
+            val dots = DashPathEffect(
+                floatArrayOf(ROUTE_DOT_DASH_PX, ROUTE_DOT_GAP_PX),
+                0f,
+            )
             val casing = Polyline(mapView).apply {
-                setPoints(stops.map { GeoPoint(it.lat, it.lng) })
+                setPoints(points)
                 outlinePaint.color = ROUTE_CASING_COLOR.toArgb()
                 outlinePaint.strokeWidth = ROUTE_CASING_WIDTH
                 outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                 outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                outlinePaint.pathEffect = dots
             }
             routeOverlays += casing
             mapView.overlays.add(casing)
 
             val polyline = Polyline(mapView).apply {
-                setPoints(stops.map { GeoPoint(it.lat, it.lng) })
+                setPoints(points)
                 outlinePaint.color = ROUTE_COLOR.toArgb()
                 outlinePaint.strokeWidth = ROUTE_WIDTH
                 outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                 outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                outlinePaint.pathEffect = dots
             }
             routeOverlays += polyline
             mapView.overlays.add(polyline)
 
-            stops.forEach { stop ->
+            // The line's own two ends. On the fallback engine they are the stops themselves and sit
+            // under their pins; with a real route the polyline starts and finishes on the road, a few
+            // metres from the place marker, and these are the only things marking that point.
+            if (points.size >= 2) {
+                val endDot = endpointDot(context, ROUTE_COLOR.toArgb())
+                listOf(points.first(), points.last()).forEach { end ->
+                    val marker = Marker(mapView).apply {
+                        position = end
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = endDot
+                        // The ends are decoration; only the numbered pins open anything.
+                        setOnMarkerClickListener { _, _ -> false }
+                    }
+                    routeOverlays += marker
+                    mapView.overlays.add(marker)
+                }
+            }
+
+            framedStops.forEach { stop ->
                 val visited = stop.id in visitedIds
                 val selected = stop.id == selectedStopId
                 val fill = when {
@@ -585,6 +688,35 @@ fun TourMap(
         onDispose { }
     }
 
+    /** The next stop's geofence, kept so it can be replaced rather than accumulating. */
+    var geofenceOverlay by remember { mutableStateOf<Polygon?>(null) }
+
+    // The ground the next stop's arrival is measured against, drawn faintly under everything else.
+    // It is a hint, not a boundary to respect: a walker may arrive from any direction, and the map
+    // says roughly how close they have to get.
+    DisposableEffect(geofenceStop?.id, geofenceStop?.triggerRadiusMeters) {
+        geofenceOverlay?.let { mapView.overlays.remove(it) }
+        geofenceOverlay = null
+        val stop = geofenceStop
+        if (stop != null && stop.triggerRadiusMeters > 0) {
+            val circle = Polygon(mapView).apply {
+                points = Polygon.pointsAsCircle(
+                    GeoPoint(stop.lat, stop.lng),
+                    stop.triggerRadiusMeters.toDouble(),
+                )
+                // Use the paint directly: the fillColor setter is deprecated in osmdroid 6.1.x.
+                fillPaint.color = GEOFENCE_FILL
+                outlinePaint.color = GEOFENCE_STROKE
+                outlinePaint.strokeWidth = GEOFENCE_STROKE_WIDTH
+            }
+            // Under the route and the pins, so the walk still reads clearly through it.
+            mapView.overlays.add(0, circle)
+            geofenceOverlay = circle
+        }
+        mapView.invalidate()
+        onDispose { }
+    }
+
     LaunchedEffect(userLat, userLng) {
         val lat = userLat ?: return@LaunchedEffect
         val lng = userLng ?: return@LaunchedEffect
@@ -640,22 +772,19 @@ fun TourMap(
     // cannot loop.
     //
     // Keyed on the targets and the viewport, not on every layout pass: after the first fit the camera
-    // is the walker's to pan and zoom.
-    val routeKey = remember(fitTargets) {
-        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
-    }
+    // is the walker's to pan and zoom. [routeKey] is the targets' own identity, established above.
     var fittedKey by remember { mutableStateOf<String?>(null) }
     fun fitToViewport(size: IntSize) {
         val key = "$routeKey:${size.width}x${size.height}"
         if (key == fittedKey) return
-        if (fitTargets.isEmpty() || size.width <= 0 || size.height <= 0) return
+        if (framedStops.isEmpty() || size.width <= 0 || size.height <= 0) return
         fittedKey = key
 
         runCatching {
             // osmdroid measures its zoom against the map view in device pixels, which is exactly what
             // the map reports here, so the raw measured viewport is what the fit is given.
             val fit = cameraFitFor(
-                targets = fitTargets,
+                targets = framedStops,
                 widthPx = size.width.toFloat(),
                 heightPx = size.height.toFloat(),
                 paddingX = (if (focusStops != null) FOCUS_PADDING_X_PX else FIT_PADDING_X_PX).toFloat(),
@@ -688,14 +817,86 @@ fun TourMap(
 }
 
 /**
+ * Warms the maps engine up on a screen the walker is already reading.
+ *
+ * The first map in a process costs far more than every map after it. Creating one is a blocking
+ * round trip into Google Play Services — traced in googlemaps/android-maps-compose#664 as
+ * `ClientParametersBlockingReference.blockedOnMainThread: ENABLE_FEATURES` for 108-126 ms, on a map
+ * with no markers at all — and on top of that the renderer loads its native side, starts its threads
+ * and fetches its first tiles. Every map after it is cheap, which is why this is worth paying once,
+ * on a screen that is not waiting for a map.
+ *
+ * A single device pixel of map, with every gesture and every control off and nothing drawn on it. It
+ * is only ever a warm-up: it is not rendered when there is nowhere to point it, and it is skipped
+ * entirely on the fallback engine, which has no start-up cost to pay.
+ *
+ * [lat] and [lng] are somewhere worth looking, so that the tiles fetched are ones the app will use
+ * again rather than a view of the Atlantic.
+ */
+@Composable
+fun MapsWarmUp(lat: Double?, lng: Double?, modifier: Modifier = Modifier) {
+    if (lat == null || lng == null) return
+    if (FORCE_FALLBACK_MAP ||
+        BuildConfig.GOOGLE_MAPS_API_KEY.isBlank() ||
+        !WalkingToursApp.modernMapsRendererAvailable
+    ) {
+        return
+    }
+
+    // It warms the process, it does not decorate the screen: once the map has loaded it takes itself
+    // away. Leaving it composed would mean a second live map during the next navigation, which is
+    // the cost this exists to remove. The give-up timer is for a map that never loads.
+    var warmedUp by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(WARM_UP_GIVE_UP_MS)
+        warmedUp = true
+    }
+    if (warmedUp) return
+
+    Log.i(TAG, "Map: warming the engine up")
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(lat, lng), WARM_UP_ZOOM.toFloat())
+    }
+
+    Box(modifier.size(1.dp).alpha(0.1f)) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            onMapLoaded = { warmedUp = true },
+            // Nothing that costs anything: no traffic, no buildings, no indoor plans and no location
+            // — the app draws its own dot and asks for fixes only while a walk is running.
+            properties = MapProperties(
+                isBuildingEnabled = false,
+                isIndoorEnabled = false,
+                isTrafficEnabled = false,
+                isMyLocationEnabled = false,
+            ),
+            uiSettings = MapUiSettings(
+                compassEnabled = false,
+                indoorLevelPickerEnabled = false,
+                mapToolbarEnabled = false,
+                myLocationButtonEnabled = false,
+                rotationGesturesEnabled = false,
+                scrollGesturesEnabled = false,
+                scrollGesturesEnabledDuringRotateOrZoom = false,
+                tiltGesturesEnabled = false,
+                zoomControlsEnabled = false,
+                zoomGesturesEnabled = false,
+            ),
+        )
+    }
+}
+
+/**
  * The same itinerary map, drawn by Google Maps, used only when a Maps key was compiled in.
  *
  * The look is deliberately identical to the osmdroid path: the same numbered pins from the shared
- * icon helper, the same blue dot with its heading cone, and the same one-time fit of a stop page's
- * two stops rather than the whole route. The difference is the line: when the key can use the
- * Directions API it is the walk a person would actually take, and until that arrives — or forever,
- * if it never does — it is straight hops between consecutive stops, which is the same line the
- * osmdroid map draws.
+ * icon helper, the same blue dot with its heading cone, and the same one-time fit of one leg rather
+ * than the whole route on a stop page. The difference is the line: when the key can use the Routes
+ * API the whole route — or, on a stop page, the current-to-next leg — is the walk a person would
+ * actually take, and until that arrives — or forever, if it never does — it is straight hops between
+ * the stops being framed, which is the same line the osmdroid map draws.
  */
 @Composable
 @OptIn(com.google.maps.android.compose.MapsComposeExperimentalApi::class)
@@ -706,6 +907,7 @@ private fun GoogleTourMap(
     userLat: Double?,
     userLng: Double?,
     focusStops: List<StopEntity>?,
+    geofenceStop: StopEntity?,
     userHeading: Float?,
     userAccuracyMeters: Float?,
     selectedStopId: String?,
@@ -717,17 +919,22 @@ private fun GoogleTourMap(
     // runCatching block. Google's camera is defined in dp, so the fit must be too.
     val density = LocalDensity.current.density
 
-    // Same fit targets as the osmdroid map: a stop page asks for the stop you are on and the one you
-    // walk to next; everywhere else the whole route is framed.
-    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    val routeKey = remember(fitTargets) {
-        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
+    // Same framed stops as the osmdroid map: a stop page is one leg, the stop the walker is on and
+    // the one they walk to next; everywhere else the whole route. They are the camera's target, the
+    // line's path and the only pins drawn.
+    //
+    // Whether a leg was asked for is decided once, here, rather than by testing focusStops again
+    // deeper down: an empty list must fall back to the whole route for the map *and* the fetch.
+    val legStops = focusStops?.takeIf { it.isNotEmpty() }
+    val framedStops = legStops ?: stops
+    val routeKey = remember(framedStops) {
+        framedStops.joinToString("|") { "${it.lat},${it.lng}" }
     }
 
-    val initialCamera = fitTargets.midpoint()?.let { (lat, lng) ->
+    val initialCamera = framedStops.midpoint()?.let { (lat, lng) ->
         CameraPosition.fromLatLngZoom(
             LatLng(lat, lng),
-            initialZoomFor(fitTargets).toFloat(),
+            initialZoomFor(framedStops).toFloat(),
         )
     }
 
@@ -758,13 +965,22 @@ private fun GoogleTourMap(
 
     // Straight hops, shown until the real route arrives and left in place if it never does. A
     // straight line between stops is a poor route but a much better map than no line at all.
-    val directPoints = remember(stops) { stops.map { LatLng(it.lat, it.lng) } }
-    /** The real walking line, empty until Directions answers. */
-    var routePoints by remember(stops) { mutableStateOf(emptyList<LatLng>()) }
-    LaunchedEffect(stops) {
-        val tourId = stops.firstOrNull()?.tourId.orEmpty()
-        if (tourId.isBlank() || stops.size < 2) return@LaunchedEffect
-        routePoints = DirectionsClient.walkingRoute(context, tourId, stops)
+    val directPoints = remember(routeKey) { framedStops.map { LatLng(it.lat, it.lng) } }
+    /** The real walking line, empty until the Routes API answers. */
+    var routePoints by remember(routeKey) { mutableStateOf(emptyList<LatLng>()) }
+    LaunchedEffect(routeKey) {
+        if (framedStops.size < 2) {
+            routePoints = emptyList()
+            return@LaunchedEffect
+        }
+        routePoints = if (legStops != null) {
+            // One leg. Cached by the ordered pair, so flipping back and forth between stops asks the
+            // Routes API once per process rather than once per visit.
+            DirectionsClient.walkingLeg(context, framedStops.first(), framedStops.last())
+        } else {
+            val tourId = framedStops.firstOrNull()?.tourId.orEmpty()
+            DirectionsClient.walkingRoute(context, tourId, framedStops)
+        }
     }
     val linePoints = if (routePoints.size >= 2) routePoints else directPoints
 
@@ -781,7 +997,7 @@ private fun GoogleTourMap(
     fun fitToViewport(size: IntSize) {
         val key = "$routeKey:${size.width}x${size.height}"
         if (key == fittedKey) return
-        if (fitTargets.isEmpty() || size.width <= 0 || size.height <= 0) return
+        if (framedStops.isEmpty() || size.width <= 0 || size.height <= 0) return
         fittedKey = key
 
         runCatching {
@@ -789,7 +1005,7 @@ private fun GoogleTourMap(
             // In dp, not pixels: see GOOGLE_FIT_PADDING_X_DP. The viewport and the margin must both
             // be in the space the SDK's zoom is defined in.
             val fit = cameraFitFor(
-                targets = fitTargets,
+                targets = framedStops,
                 widthPx = size.width / density,
                 heightPx = size.height / density,
                 paddingX = (
@@ -813,6 +1029,7 @@ private fun GoogleTourMap(
     // drawables and are safe to build here; they only become Google icons inside the map below.
     val coneDot = remember { userLocationDot(context, withCone = true) }
     val plainDot = remember { userLocationDot(context, withCone = false) }
+    val endpointDotIcon = remember { endpointDot(context, ROUTE_COLOR.toArgb()) }
 
     val walker = rememberWalkerDot(userLat, userLng, userHeading)
 
@@ -846,23 +1063,58 @@ private fun GoogleTourMap(
         MapEffect(Unit) { mapReady = true }
 
         if (linePoints.size >= 2) {
+            // Dot then gap, shared by both lines, so the casing's wider dots sit concentrically
+            // behind the coloured ones rather than weaving between them.
+            val dots: List<PatternItem> = listOf(Dot(), Gap(ROUTE_DOT_GAP_PX))
             GooglePolyline(
                 points = linePoints,
                 color = ROUTE_CASING_COLOR,
                 width = ROUTE_CASING_WIDTH,
+                pattern = dots,
                 zIndex = 1f,
             )
             GooglePolyline(
                 points = linePoints,
                 color = ROUTE_COLOR,
                 width = ROUTE_WIDTH,
+                pattern = dots,
                 zIndex = 2f,
             )
+
+            // The line's own two ends — the Routes API's polyline termini, which sit on the road and
+            // are usually a few metres from the place pin. Drawn under the pins: when the route has
+            // snapped exactly to a stop, the numbered pin stays the thing you read.
+            val endDot = remember(linePoints) { endpointDotIcon.toBitmapDescriptor() }
+            listOf(linePoints.first(), linePoints.last()).forEach { end ->
+                GoogleMarker(
+                    state = rememberUpdatedMarkerState(position = end),
+                    anchor = Offset(0.5f, 0.5f),
+                    icon = endDot,
+                    zIndex = 2.6f,
+                    // Decoration only: the numbered pins are what open a stop.
+                    onClick = { false },
+                )
+            }
+        }
+
+        // The next stop's geofence, faint enough to read as a hint rather than a shape. Under the
+        // pins and the route, above the tiles.
+        geofenceStop?.let { stop ->
+            if (stop.triggerRadiusMeters > 0) {
+                Circle(
+                    center = LatLng(stop.lat, stop.lng),
+                    radius = stop.triggerRadiusMeters.toDouble(),
+                    fillColor = Color(GEOFENCE_FILL),
+                    strokeColor = Color(GEOFENCE_STROKE),
+                    strokeWidth = GEOFENCE_STROKE_WIDTH,
+                    zIndex = 2.4f,
+                )
+            }
         }
 
         // A plain for loop, not forEach: the map content lambda is @GoogleMapComposable and the
         // target marker has to stay on the call site for the marker composables to be legal here.
-        for (stop in stops) {
+        for (stop in framedStops) {
             val visited = stop.id in visitedIds
             val selected = stop.id == selectedStopId
             val fill = when {
@@ -882,7 +1134,8 @@ private fun GoogleTourMap(
                 icon = remember(stop.order, visited, selected) {
                     numberedMarkerIcon(context, stop.order, fill, visited).toBitmapDescriptor()
                 },
-                zIndex = if (selected) 3f else 2f,
+                // Above the route, its endpoint dots (2.6) and the geofence, below the walker.
+                zIndex = if (selected) 3.5f else 3f,
                 onClick = {
                     onStopClick(stop)
                     true
@@ -902,7 +1155,7 @@ private fun GoogleTourMap(
                     fillColor = Color(ACCURACY_FILL),
                     strokeColor = Color(ACCURACY_STROKE),
                     strokeWidth = 3f,
-                    zIndex = 2.5f,
+                    zIndex = 4f,
                 )
             }
 
@@ -917,7 +1170,7 @@ private fun GoogleTourMap(
                     (if (userHeading != null) coneDot else plainDot).toBitmapDescriptor()
                 },
                 rotation = walker.heading,
-                zIndex = 4f,
+                zIndex = 5f,
                 // Tapping your own dot should not open a bubble over the map.
                 onClick = { false },
             )
@@ -1156,16 +1409,66 @@ private fun fitZoomFor(
 )
 
 /**
+ * The start/end dot that caps each end of the route line.
+ *
+ * A white ring around a solid centre in the route colour, the same construction as the "you are
+ * here" dot so the two read as belonging to the same language, and small enough not to compete with
+ * a numbered pin when the route happens to end exactly on one. Built once per colour: nothing about
+ * it varies, and it is asked for on every map that is put on screen.
+ */
+private val endpointDots = mutableMapOf<Int, android.graphics.Bitmap>()
+
+private fun endpointDot(context: android.content.Context, color: Int): Drawable = BitmapDrawable(
+    context.resources,
+    endpointDots.getOrPut(color) { drawEndpointDot(color) },
+)
+
+private fun drawEndpointDot(color: Int): android.graphics.Bitmap {
+    val size = ENDPOINT_DOT_SIZE_PX
+    val centre = size / 2f
+    val ringRadius = 15f
+    val dotRadius = 9f
+
+    val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+    // A soft shadow lifts the dot off the tiles, exactly as the walker's dot has one.
+    paint.color = android.graphics.Color.argb(56, 0, 0, 0)
+    paint.maskFilter = android.graphics.BlurMaskFilter(6f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    canvas.drawCircle(centre, centre + 1.5f, ringRadius + 2.5f, paint)
+    paint.maskFilter = null
+
+    paint.color = android.graphics.Color.WHITE
+    canvas.drawCircle(centre, centre, ringRadius, paint)
+    paint.color = color
+    canvas.drawCircle(centre, centre, dotRadius, paint)
+
+    return bitmap
+}
+
+/**
  * The "you are here" dot, drawn the way map apps do it: a soft accuracy halo, a white ring, a solid
  * blue centre, and a translucent cone pointing straight up.
  *
  * The cone points up because the marker is rotated by `Marker.setRotation` using the compass
  * bearing, so "up" in this bitmap becomes "the way you are facing" on the map.
+ *
+ * It is built once. Nothing about it varies, and it is not cheap: a four-hundred pixel bitmap with
+ * two blurred passes in it, drawn on the main thread, twice over — and it used to be drawn again for
+ * every map the app put on screen, at the moment that screen was arriving.
  */
+private val userDots = mutableMapOf<Boolean, android.graphics.Bitmap>()
+
 private fun userLocationDot(
     context: android.content.Context,
     withCone: Boolean,
-): android.graphics.drawable.Drawable {
+): android.graphics.drawable.Drawable = android.graphics.drawable.BitmapDrawable(
+    context.resources,
+    userDots.getOrPut(withCone) { drawUserLocationDot(withCone) },
+)
+
+private fun drawUserLocationDot(withCone: Boolean): android.graphics.Bitmap {
     // The bitmap is mostly cone, so it is much larger than the dot. The anchor is the bitmap centre,
     // which is also the dot, so rotating the marker spins the cone about the dot rather than about
     // the middle of a long wedge.
@@ -1218,7 +1521,7 @@ private fun userLocationDot(
     paint.color = android.graphics.Color.parseColor("#FF1A73E8")
     canvas.drawCircle(centre, centre, dotRadius, paint)
 
-    return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+    return bitmap
 }
 
 private const val TAG = "TourMap"

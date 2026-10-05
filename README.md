@@ -86,7 +86,9 @@ difference cropped a fourteen-stop overview down to eight stops. The fit is a si
 each engine feeds it coordinates in its own unit — see `TourMap.kt` if you enjoy that sort of thing.
 
 Walking routes come from Google's **Routes API** (*not* Directions — that one is legacy and answers
-`REQUEST_DENIED`). Polylines are cached in memory only, because the terms say don't store them.
+`REQUEST_DENIED`). A stop page only asks for the leg it is standing on — current stop to next — and
+each leg is cached by its ordered pair, so flicking back and forth between stops does not refetch.
+Polylines are cached in memory only, because the terms say don't store them.
 
 ---
 

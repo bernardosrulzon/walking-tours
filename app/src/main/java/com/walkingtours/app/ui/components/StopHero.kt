@@ -51,8 +51,10 @@ fun StopHero(
     userHeading: Float?,
     userAccuracyMeters: Float?,
     onOpenStop: (StopEntity) -> Unit,
-    /** Stops the map camera should frame; null frames the whole route. */
+    /** Stops the map fits, lines and marks; null draws the whole route. */
     focusStops: List<StopEntity>? = null,
+    /** Next stop whose geofence radius the map draws; null draws no fence. */
+    geofenceStop: StopEntity? = null,
     modifier: Modifier = Modifier,
     heroHeight: Dp = 250.dp,
     /** 0 shows the photograph first, 1 shows the map first. */
@@ -111,6 +113,7 @@ fun StopHero(
                     userAccuracyMeters = userAccuracyMeters,
                     selectedStopId = stop?.id,
                     focusStops = focusStops,
+                    geofenceStop = geofenceStop,
                         onStopClick = onOpenStop,
                         modifier = Modifier.fillMaxSize(),
                     )

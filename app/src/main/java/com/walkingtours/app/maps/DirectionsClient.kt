@@ -50,11 +50,12 @@ internal object DirectionsClient {
     private const val MAX_COORDINATES = MAX_INTERMEDIATES + 2
 
     /**
-     * The route per tour id, for this process only.
+     * The route per cache key, for this process only.
      *
-     * An empty list is a remembered failure rather than "not fetched": a key that cannot use the
-     * Routes API is asked exactly once per launch instead of on every recomposition, and the map
-     * simply keeps its straight line.
+     * A whole tour is keyed by its id; one leg is keyed by the ordered pair of stops it joins. An
+     * empty list is a remembered failure rather than "not fetched": a key that cannot use the Routes
+     * API is asked exactly once per launch instead of on every recomposition, and the map simply
+     * keeps its straight line.
      */
     private val cache = ConcurrentHashMap<String, List<LatLng>>()
 
@@ -69,16 +70,50 @@ internal object DirectionsClient {
         tourId: String,
         stops: List<StopEntity>,
     ): List<LatLng> {
-        cache[tourId]?.let { return it }
-        if (tourId.isBlank() || stops.size < 2) return emptyList()
+        if (tourId.isBlank()) return emptyList()
+        return route(context, tourId, stops)
+    }
+
+    /**
+     * The walking line for one leg of a tour, from [from] to [to].
+     *
+     * A stop page only ever needs the leg it is standing on, not the whole itinerary, and it flips
+     * forwards and backwards between stops as the walker browses. Caching the leg under its ordered
+     * pair means each of those flips is one request per process at most, and a page that is left and
+     * returned to asks the Routes API no more than the first time.
+     *
+     * The key is direction-sensitive because a route is not symmetric: the walk from A to B is not
+     * the walk from B to A.
+     */
+    suspend fun walkingLeg(
+        context: Context,
+        from: StopEntity,
+        to: StopEntity,
+    ): List<LatLng> = route(context, legKey(from, to), listOf(from, to))
+
+    /**
+     * Fetch [stops]' walking line unless [key] is already cached, and remember the answer — empty
+     * included — under that key. The one place every route goes through, so the caching and the
+     * never-throw promise are stated once.
+     */
+    private suspend fun route(
+        context: Context,
+        key: String,
+        stops: List<StopEntity>,
+    ): List<LatLng> {
+        cache[key]?.let { return it }
+        if (stops.size < 2) return emptyList()
 
         val points = runCatching { fetchRoute(context, stops) }
-            .onFailure { Log.i(TAG, "Routes API request failed for $tourId: ${it.message}") }
+            .onFailure { Log.i(TAG, "Routes API request failed for $key: ${it.message}") }
             .getOrDefault(emptyList())
 
-        cache[tourId] = points
+        cache[key] = points
         return points
     }
+
+    /** A leg's cache key: distinct from a tour id, and ordered. */
+    private fun legKey(from: StopEntity, to: StopEntity) = "leg:${from.id}->${to.id}"
 
     private suspend fun fetchRoute(context: Context, stops: List<StopEntity>): List<LatLng> {
         // A tour longer than the API's coordinate limit is truncated rather than rejected: a route

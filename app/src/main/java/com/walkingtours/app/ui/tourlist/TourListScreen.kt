@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,7 +37,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.ui.components.AssetPhoto
+import com.walkingtours.app.ui.components.MapsWarmUp
 import com.walkingtours.app.ui.components.Pill
 import com.walkingtours.app.util.Formatters
 
@@ -68,6 +72,18 @@ fun TourListScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val stopCounts by remember { repository.observeStopCounts() }
         .collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Where to warm the maps engine up (see MapsWarmUp): the first stop of the first tour. Anywhere
+    // along a walk would do — every map here frames the same route — and this costs one indexed read
+    // on a screen that is going to query the stops anyway.
+    var warmUpAt by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    LaunchedEffect(tours, stopCounts) {
+        if (warmUpAt != null) return@LaunchedEffect
+        val firstTour = tours.firstOrNull() ?: return@LaunchedEffect
+        val firstStop = runCatching { repository.getStops(firstTour.id).firstOrNull() }
+            .getOrNull() ?: return@LaunchedEffect
+        warmUpAt = firstStop.lat to firstStop.lng
+    }
 
     Scaffold(
         topBar = {
@@ -93,36 +109,46 @@ fun TourListScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(innerPadding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                Text(
-                    text = "Put your earphones in, pick a walk, and let the app tell you what you " +
-                        "are looking at as you arrive.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            items(tours, key = { it.id }) { tour ->
-                val stopCount = stopCounts.firstOrNull { it.tourId == tour.id }?.stopCount ?: 0
-                TourCard(tour = tour, stopCount = stopCount, onClick = { onOpenTour(tour.id) })
-            }
-
-            if (tours.isEmpty()) {
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(innerPadding),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 item {
                     Text(
-                        text = "Loading tours\u2026",
+                        text = "Put your earphones in, pick a walk, and let the app tell you what you " +
+                            "are looking at as you arrive.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
+                items(tours, key = { it.id }) { tour ->
+                    val stopCount = stopCounts.firstOrNull { it.tourId == tour.id }?.stopCount ?: 0
+                    TourCard(tour = tour, stopCount = stopCount, onClick = { onOpenTour(tour.id) })
+                }
+
+                if (tours.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Loading tours\u2026",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
+
+        // A single pixel of map, behind the list's corner. The walker cannot see it and does not
+        // wait for it; the tour's own map is what benefits (see MapsWarmUp).
+        MapsWarmUp(
+            lat = warmUpAt?.first,
+            lng = warmUpAt?.second,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(innerPadding),
+        )
         }
     }
 }

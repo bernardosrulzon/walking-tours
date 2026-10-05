@@ -132,6 +132,23 @@ private fun calculateInSampleSize(width: Int, height: Int, targetWidth: Int): In
 }
 
 /**
+ * The pins already drawn, keyed by what one is made of.
+ *
+ * A map builds one of these per stop every time it appears: a bitmap with a circle, a ring and a
+ * number in it, on the main thread, as the screen is arriving. Fifteen of them for this tour, and
+ * the same fifteen the next time a map is put on screen, so they are kept. A fourteen-stop tour
+ * costs a few hundred kilobytes for it.
+ *
+ * The colour is part of the key because it carries the state — blue for a stop still to come, teal
+ * for one already walked, amber for the selected one — and so is [visited], which replaces the
+ * number with a tick.
+ *
+ * Bitmaps rather than drawables: a drawable holds on to the Context it was built from, and these
+ * outlive the screen that asked for them.
+ */
+private val markerBitmaps = mutableMapOf<Triple<Int, Int, Boolean>, Bitmap>()
+
+/**
  * Builds the numbered pin used on the itinerary map.
  *
  * A number on the pin is what lets someone match "stop 7" in the list to a dot on the map at a
@@ -142,7 +159,14 @@ fun numberedMarkerIcon(
     number: Int,
     fillColor: Int,
     visited: Boolean,
-): Drawable {
+): Drawable = BitmapDrawable(
+    context.resources,
+    markerBitmaps.getOrPut(Triple(number, fillColor, visited)) {
+        drawMarkerIcon(number, fillColor, visited)
+    },
+)
+
+private fun drawMarkerIcon(number: Int, fillColor: Int, visited: Boolean): Bitmap {
     // The badge is anchored by its bottom edge, so transparent padding below the circle becomes a
     // silent northward offset on the map: the previous 8 px inset put every stop roughly 7 m from
     // the place it names at zoom 17. Sizing the circle to the bitmap removes it, so the bottom edge
@@ -174,5 +198,5 @@ fun numberedMarkerIcon(
     val centerY = size / 2f - (paint.descent() + paint.ascent()) / 2f
     canvas.drawText(label, size / 2f, centerY, paint)
 
-    return BitmapDrawable(context.resources, bitmap)
+    return bitmap
 }

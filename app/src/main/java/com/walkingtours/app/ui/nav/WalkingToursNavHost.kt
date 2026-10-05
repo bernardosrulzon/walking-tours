@@ -10,7 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.walkingtours.app.ServiceLocator
+import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.ui.settings.SettingsScreen
 import com.walkingtours.app.ui.stop.StopScreen
 import com.walkingtours.app.ui.tourdetail.TourDetailScreen
@@ -22,30 +22,17 @@ object Routes {
     const val TOUR_DETAIL = "tour/{tourId}"
 
     /**
-     * One route for one screen. Leaving [stopId] off means "resume the tour"; passing it opens that
-     * stop. There used to be a separate walking screen and stop screen, which were close enough in
-     * content to read as duplicates.
-     */
-    const val STOP = "tour/{tourId}/stop?stopId={stopId}&startAt={startAt}"
-
-    /**
-     * Passed as `startAt` when the walker opened the introduction to read it rather than to walk.
+     * The active-tour screen: one route for one screen, whatever brought the walker here.
      *
-     * The resume route otherwise means "make sure the tour is running and follow its current stop",
-     * which for the introduction is wrong twice over: there is no stop to follow, and starting a
-     * tour to read a page picks whichever stop the walker happens to be standing nearest.
+     * `entry` is the only argument, because which page to land on is the only thing that differs
+     * between Start tour, Resume tour and tapping a stop. A typed [TourEntry] carries that intent,
+     * rather than a stop id and a sentinel that each screen had to interpret for itself.
      */
-    const val INTRO = "intro"
-
-    /** As [INTRO], and wipes what the walker has already completed. */
-    const val START_OVER = "over"
+    const val STOP = "tour/{tourId}/stop?entry={entry}"
 
     fun tourDetail(tourId: String) = "tour/$tourId"
 
-    fun stop(tourId: String, stopId: String) = "tour/$tourId/stop?stopId=$stopId"
-
-    fun resumeTouring(tourId: String, startAt: String? = null): String =
-        if (startAt.isNullOrBlank()) "tour/$tourId/stop" else "tour/$tourId/stop?startAt=$startAt"
+    fun tourEntry(tourId: String, entry: TourEntry) = "tour/$tourId/stop?entry=${entry.encode()}"
 }
 
 @Composable
@@ -72,6 +59,18 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
         popExitTransition = {
             slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it }
         },
+        // A predictive back is not the same code path as an ordinary pop, and it has its own
+        // defaults. Navigation Compose answers a predictive pop by scaling the outgoing screen to
+        // 70% and merely fading the destination in, so pressing the system back button shrank the
+        // page into the middle of the screen while the toolbar arrow and a quick back did the
+        // slide above. Reach for predictive back here too, or back looks different depending on
+        // how it was asked for.
+        predictivePopEnterTransition = {
+            slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it / 3 }
+        },
+        predictivePopExitTransition = {
+            slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it }
+        },
     ) {
 
         composable(Routes.TOURS) {
@@ -93,27 +92,25 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
             TourDetailScreen(
                 tourId = tourId,
                 onBack = { navController.popBackStack() },
-                // Plain resume: no introduction, and it lands on the first stop still to see.
-                onResumeTour = { navController.navigate(Routes.resumeTouring(tourId)) },
+                // Every button and every stop row leads to the same screen; the entry says where on
+                // it to land. Starting a walk needs location, so permission is asked here, at the
+                // moment the walker actually sets off, rather than at first launch.
+                onStartTour = {
+                    onRequestLocationPermission()
+                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Introduction))
+                },
+                onResumeTour = {
+                    onRequestLocationPermission()
+                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Resume))
+                },
                 onStartOver = {
                     onRequestLocationPermission()
-                    navController.navigate(Routes.resumeTouring(tourId, Routes.START_OVER))
+                    navController.navigate(Routes.tourEntry(tourId, TourEntry.StartOver))
                 },
-                onStartTour = {
-                    // Geofencing needs location, so ask at the moment the user actually starts
-                    // walking rather than at first launch.
+                onOpenStop = { stopId ->
                     onRequestLocationPermission()
-                    // From the top: the introduction plays even if this tour has been walked
-                    // before, because that is what a button called Start tour promises.
-                    navController.navigate(Routes.resumeTouring(tourId, Routes.INTRO))
+                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Stop(stopId)))
                 },
-                // Tapping a stop begins the walk there rather than opening it for reading: the
-                // session turns a named start stop into a real arrival, arms the geofences and
-                // records progress, which is what "join at this stop" always meant. With a walk
-                // already running the session is left alone and the stop simply becomes current,
-                // because the settled page is what makes a stop current on a running tour.
-                onOpenStop = { stopId -> navController.navigate(Routes.resumeTouring(tourId, stopId)) },
-                onOpenIntroduction = { navController.navigate(Routes.resumeTouring(tourId, Routes.INTRO)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
@@ -122,43 +119,19 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
             route = Routes.STOP,
             arguments = listOf(
                 navArgument("tourId") { type = NavType.StringType },
-                navArgument("stopId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("startAt") {
+                navArgument("entry") {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
                 },
             ),
-        ) { entry ->
-            val tourId = entry.arguments?.getString("tourId").orEmpty()
-            val stopId = entry.arguments?.getString("stopId")
-            val startAt = entry.arguments?.getString("startAt")
+        ) { navEntry ->
+            val tourId = navEntry.arguments?.getString("tourId").orEmpty()
+            val tourEntry = TourEntry.decode(navEntry.arguments?.getString("entry"))
             StopScreen(
                 tourId = tourId,
-                stopId = stopId,
-                startAtStopId = startAt,
+                entry = tourEntry,
                 onBack = { navController.popBackStack() },
-                onOpenStop = { next ->
-                    // Stepping between stops REPLACES the stop page instead of stacking another one.
-                    // Without this, swiping through six stops left six entries behind and the back
-                    // button replayed the whole journey one stop at a time rather than returning to
-                    // the tour — which is exactly what felt wrong.
-                    val replacingAStop = navController.currentDestination?.route == Routes.STOP
-                    navController.navigate(Routes.stop(tourId, next)) {
-                        if (replacingAStop) popUpTo(Routes.STOP) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
-                onStartTour = { fromStopId ->
-                    onRequestLocationPermission()
-                    // The walker is already on this stop's page, so the tour starts here instead of
-                    // pushing an identical screen on top of the one they are looking at.
-                    ServiceLocator.session.startTour(tourId, fromStopId)
-                },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

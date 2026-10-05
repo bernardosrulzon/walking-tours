@@ -69,14 +69,14 @@ import com.walkingtours.app.util.Formatters
 fun TourDetailScreen(
     tourId: String,
     onBack: () -> Unit,
+    /** Begins the walk: the introduction plays, then the geofences take over. */
     onStartTour: () -> Unit,
     /** Continues a part-finished walk at the first stop still to see. */
     onResumeTour: () -> Unit,
     /** Wipes completed stops and begins again. */
     onStartOver: () -> Unit,
+    /** Starts the walk at this stop and shows it. */
     onOpenStop: (String) -> Unit,
-    /** Opens the walk's introduction, which heads the route. */
-    onOpenIntroduction: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val repository = ServiceLocator.repository
@@ -302,7 +302,7 @@ fun TourDetailScreen(
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     SectionTitle("The route, stop by stop")
                     Text(
-                        text = "Tap any stop to read or listen to it, whether or not you are there.",
+                        text = "The walk starts with the introduction. Tap any stop to begin there.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -310,14 +310,14 @@ fun TourDetailScreen(
             }
 
             // The introduction heads the route rather than hiding behind a toggle: it is the first
-            // thing the walk says, and it is a page of the stop screen now, like any stop.
+            // page of the walk, and tapping it is the same act as pressing Start tour.
             if (tourEntity?.overviewText?.isNotBlank() == true) {
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clickable(onClick = onOpenIntroduction),
+                            .clickable(onClick = onStartTour),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     ) {
                         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {

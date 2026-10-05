@@ -54,21 +54,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
-import com.walkingtours.app.ui.nav.Routes
-import com.walkingtours.app.data.db.TourEntity
+import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.tour.TourSessionManager
 import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
@@ -85,32 +84,23 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
- * The one screen for looking at a stop — whether you tapped it from the tour overview, or arrived
- * at it by walking.
+ * The one screen for walking and for looking at a stop.
  *
- * There used to be two screens here, and they overlapped enough to feel like duplicates: both showed
- * a photograph and a map, both showed the transcript, and both had playback controls. They differed
- * only in that one knew a tour was in progress. So there is now a single page, and the walking-only
- * parts — the arrival banner, the walk-to-the-next-stop guidance, tour progress and the End action —
- * simply appear when a tour is running.
- *
- * A null [stopId] means "resume the tour and show me wherever I am".
+ * A tour is one introduction plus N stops, and this screen shows them as a single pager: page zero is
+ * the introduction when the tour has one, and the stops follow. The [entry] the screen arrived with
+ * decides where it lands; after that the session's current stop is the only authority on which page
+ * is showing. Swiping to a page makes that stop current, and a geofence arrival moves the page.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StopScreen(
     tourId: String,
-    /** Null means "resume the tour and show me wherever I am". */
-    stopId: String?,
-    startAtStopId: String?,
+    /** Which page to land on: the introduction, the first stop still to see, or one stop. */
+    entry: TourEntry,
     onBack: () -> Unit,
-    /** Called with another stop to open — one tapped on the hero's map, for instance. */
-    onOpenStop: (String) -> Unit,
-    onStartTour: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val session = ServiceLocator.session
-    val repository = ServiceLocator.repository
     val state by session.state.collectAsStateWithLifecycle()
     val narration by session.narration.progress.collectAsStateWithLifecycle()
 
@@ -131,43 +121,12 @@ fun StopScreen(
         }
     }
 
-    val isResume = stopId == null
-
-    // Opened from the route list to be read. Not a walk: the tour must not be started, because
-    // starting one with no stop named nominates whichever stop the walker is nearest.
-    val wantsIntroduction = startAtStopId == Routes.INTRO || startAtStopId == Routes.START_OVER
-    val startsOver = startAtStopId == Routes.START_OVER
-
-    // "Resume" means: make sure the tour is running, then follow the session's current stop.
-    LaunchedEffect(tourId, startAtStopId, isResume) {
-        if (!isResume) return@LaunchedEffect
-        if (wantsIntroduction) {
-            // Start tour, and the introduction row, both mean begin at the introduction. Said
-            // explicitly rather than inferred from progress, and it restarts rather than no-opping,
-            // so it works on a phone that has walked this tour before.
-            session.startTour(tourId, fromTheTop = true, clearProgress = startsOver)
-        } else if (state.tourId != tourId || !state.isRunning) {
-            session.startTour(tourId, startAtStopId)
-        }
+    // One entry, one start. Every way in — Start tour, Start over, Resume, a tapped stop — arrives
+    // here, and the session turns it into a landing page. Re-applying it after a configuration
+    // change is safe: the session adjusts an already-running tour instead of restarting it.
+    LaunchedEffect(tourId, entry) {
+        session.startTour(tourId, entry)
     }
-
-    val allStops by produceState(initialValue = emptyList<StopEntity>(), tourId) {
-        repository.ensureContentLoaded()
-        value = repository.getStops(tourId)
-    }
-
-    // The tour's own photograph, for the hero while no stop is current.
-    // The tour itself, not just its photograph: the introduction page needs the overview text
-    // whether or not a walk is running, so it can be read before committing to the walk.
-    val tour by produceState(initialValue = null as TourEntity?, tourId) {
-        repository.ensureContentLoaded()
-        value = repository.getTour(tourId)
-    }
-    val tourHeroImage = tour?.heroImage
-    val tourOverviewText = tour?.overviewText.orEmpty()
-    val stopProgress by remember(tourId) { repository.observeStopProgress(tourId) }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
-    val visitedIds = stopProgress.map { it.stopId }.toSet()
 
     // Prefer the tracker's own fix: the session only carries one while a tour is running.
     val mapLat = trackerFix?.latitude ?: state.userLat
@@ -176,157 +135,91 @@ fun StopScreen(
 
     val isLive = state.isRunning && state.tourId == tourId
 
-    // The city introduction is a page in its own right, in front of the stops, so it gets an index
-    // of its own and every page-to-stop mapping on this screen goes through stopIndexFor: the pager
-    // below, the initial landing, following the session's stop, the narration, the app bar.
-    //
-    // "Has an introduction to show" is deliberately not `state.showingOverview`. That flag is about
-    // what is playing this second, and it turns false in three places while the walker is still
-    // standing on the page — pressing Next, the narration reaching its end, a geofence arrival — so
-    // a page count keyed off it would drop a page out from under the pager and renumber every stop
-    // behind the walker's back (stop one's page 1 would quietly become stop two). The tour and its
-    // overview text, though, are fixed for as long as that tour is the one running: a live tour with
-    // an introduction keeps it as its first page from start to finish, which is exactly what lets
-    // stop one's Previous lead back to it long after it has stopped talking. No running tour, or no
-    // overview text, means there is nothing to give a page to.
-    // Keyed on the tour's own introduction text, not on whether a walk is running: the page exists
-    // so the introduction can be read before starting, and so the all-stops list can offer it.
-    val introPages = if (tourOverviewText.isNotBlank()) 1 else 0
+    // Every page this screen shows comes from the session, and only while the session is running this
+    // tour: the state carries whichever tour was started last, which is not necessarily this one.
+    // Reading the repository's own copy instead used to compose a page before the session had named a
+    // stop, so tapping a stop flashed the introduction — page zero — for as long as the two sources
+    // disagreed.
+    val pageStops = if (isLive) state.stops else emptyList()
+    val visitedIds = if (isLive) state.visitedStopIds else emptySet()
+
+    // The introduction is a page in its own right, in front of the stops, so it takes an index of its
+    // own and every page-to-stop mapping goes through stopIndexFor. It exists for as long as the walk
+    // does — keyed on the tour's overview text, not on `state.showingOverview`, which turns false the
+    // moment the walker moves on while the page stays, so stop one's Previous can lead back to it.
+    val introPages = if (isLive && state.overviewText.isNotBlank()) 1 else 0
     fun stopIndexFor(page: Int) = page - introPages
+    fun pageForStop(stopId: String): Int? =
+        pageStops.indexOfFirst { it.id == stopId }.takeIf { it >= 0 }?.plus(introPages)
 
     // A pager rather than a sideways gesture that only navigates on release, because the neighbouring
     // stop has to be visible *while the finger is still down* — the next page follows the drag and
     // then settles, which is what makes moving between stops feel like one continuous surface.
     // Navigation Compose has no gesture-driven transition API, so a pager is the only way to get
     // that, and the pages are the stops themselves with the introduction in front of them.
-    val pagerState = rememberPagerState(pageCount = { allStops.size + introPages })
+    val pagerState = rememberPagerState(pageCount = { pageStops.size + introPages })
     val scope = rememberCoroutineScope()
 
     // One scroll position per page, held out here rather than inside each page so the introduction's
     // Next can put stop one back at the top on its way in. A request is not a scroll: the page it
     // names picks the position up the next time it is measured, whether or not it has been composed.
-    val pageListStates = remember(allStops.size, introPages) {
-        List(allStops.size + introPages) { LazyListState() }
+    val pageListStates = remember(pageStops.size, introPages) {
+        List(pageStops.size + introPages) { LazyListState() }
     }
 
-    // The top bar and the AskBar follow the settled page, not whichever stop the screen was opened
-    // with, so the title always names the page the walker has landed on.
+    // True once the pager has been put on the page the walker asked for. Until then it is still on
+    // page zero, which is the introduction, so it is neither drawn nor allowed to name the screen.
+    var landingApplied by remember { mutableStateOf(false) }
+
+    // The top bar and the AskBar follow the settled page, so the title names the page the walker has
+    // landed on. Before that landing the pager is still on page zero, so the title follows the stop
+    // the session is taking them to instead — naming the introduction over a stop the walker has just
+    // tapped is the same flash, just in the title. A negative stop index is the introduction, which
+    // has no stop to name.
+    val settledStopIndex = if (landingApplied) {
+        stopIndexFor(pagerState.currentPage)
+    } else {
+        state.currentStopId?.let { pageForStop(it)?.minus(introPages) } ?: -1
+    }
+    val settledStop = pageStops.getOrNull(settledStopIndex)
+
+    // The pager follows the session: the stop the tour is on is the page on screen. The first move is
+    // a jump — the walker asked to land somewhere and should not watch the pages scroll past — and
+    // every move after that is an animation, so a geofence arrival slides in.
     //
-    // Until the tour names a stop — while the city introduction is playing — there is no stop to
-    // name either, and the introduction page, whose stop index is negative, has none to offer
-    // whatever the session says. The stops' own pages are no longer held empty to match; they used
-    // to be, back when the introduction was a card inside page one and a pager had no "no stop" page
-    // for it to live on.
-    val noStopYet = isResume && state.currentStopId == null
-    val settledStopIndex = stopIndexFor(pagerState.currentPage)
-    val settledStop = allStops.getOrNull(settledStopIndex).takeUnless { noStopYet }
-
-    // Land on the stop we were asked for as soon as the list has arrived: the stop that was opened,
-    // else wherever the tour has got to, else the first page. It happens once — after that the
-    // walker's own swiping is in charge — and while resuming it waits for the session to name a
-    // stop rather than yanking the pager to the first page and staying there.
-    var didInitialScroll by remember { mutableStateOf(false) }
-    LaunchedEffect(allStops, stopId, state.currentStopId, introPages) {
-        if (didInitialScroll || allStops.isEmpty() || pagerState.isScrollInProgress) {
-            return@LaunchedEffect
+    // This is the only effect that moves the page by itself. Movement in the other direction — a page
+    // settling makes its stop current — goes through playStop below, and the two cannot fight because
+    // arriving at a page whose stop is already current does nothing.
+    LaunchedEffect(state.currentStopId, isLive, pageStops, introPages) {
+        if (!isLive || pageStops.isEmpty()) return@LaunchedEffect
+        val current = state.currentStopId
+        val target = when {
+            // A null current stop is the introduction, which only has a page when the tour has one.
+            current == null -> if (introPages > 0) 0 else return@LaunchedEffect
+            // A stop the pages do not have yet: wait for the next state rather than guessing.
+            else -> pageForStop(current) ?: return@LaunchedEffect
         }
-        if (wantsIntroduction || state.showingOverview) {
-            // Wait for the introduction to have a page at all. The tour's text arrives after the
-            // stop list, so page zero is still stop one for a moment, and landing then put the
-            // walker on stop one and marked the landing done.
-            if (introPages == 0) return@LaunchedEffect
-            // The introduction is what belongs on screen: either it was opened deliberately, or it
-            // is playing because a walk has just begun. Following the stop named by the route would
-            // slide straight past it — pressing Start tour starts at stop one, whose page is now one
-            // past the introduction.
-            didInitialScroll = true
-            pagerState.scrollToPage(0)
-            return@LaunchedEffect
-        }
-        val wanted = when {
-            stopId != null -> stopId
-            // Resume goes to the first stop still to see, in route order — not to whichever stop the
-            // session last had, which on a phone used before was simply the last one touched.
-            isResume && allStops.isNotEmpty() ->
-                allStops.firstOrNull { it.id !in visitedIds }?.id
-            else -> state.currentStopId
-        } ?: return@LaunchedEffect
-        val stopIndex = allStops.indexOfFirst { it.id == wanted }
-        if (stopIndex < 0) return@LaunchedEffect
-        didInitialScroll = true
-        val target = stopIndex + introPages
-        if (target != pagerState.currentPage) pagerState.scrollToPage(target)
-    }
-
-    // Inserting or removing the introduction page renumbers every stop: the page that was showing
-    // stop five is now showing stop four. That only happens when a tour starts or ends on this
-    // screen, so move the walker's page by the same amount and the stop on screen stays the stop on
-    // screen. The exception is a tour that begins by playing its introduction — there the
-    // introduction is precisely what belongs on screen, and it is page zero.
-    var introPagesSeen by remember { mutableStateOf(introPages) }
-    LaunchedEffect(introPages) {
-        val delta = introPages - introPagesSeen
-        introPagesSeen = introPages
-        if (delta == 0 || pagerState.pageCount == 0) return@LaunchedEffect
-        // Inserting the page renumbers the stops, so normally the walker is carried with the stop
-        // they were looking at. Reading the introduction is the exception: page zero is what they
-        // asked for, so go there rather than preserving a stop they never chose.
-        val target = if (state.showingOverview || wantsIntroduction) 0 else pagerState.currentPage + delta
-        pagerState.scrollToPage(target.coerceIn(0, pagerState.pageCount - 1))
-    }
-
-    // For as long as the introduction is playing, page zero is what belongs on screen.
-    //
-    // Its own effect rather than a clause in the ones above, because the ordering is not guaranteed:
-    // the introduction page is inserted as soon as the tour's text loads, which can be a moment
-    // before the session starts narrating. Renumbering then carried the walker onto stop one, and
-    // once the landing was marked done nothing moved them back.
-    LaunchedEffect(state.showingOverview, introPages) {
-        if (state.showingOverview && introPages > 0) {
-            didInitialScroll = true
-            if (pagerState.currentPage != 0) pagerState.scrollToPage(0)
-        }
-    }
-
-    // On the resume route the screen belongs to the session: when the walker reaches the next stop
-    // the pager has to follow it, which is what resolving the session's stop used to do. A stop that
-    // was opened deliberately is the walker's to leave, so only the resume route follows.
-    //
-    // introPages is a key as well as a dependency: the offset it supplies has to be the one in force
-    // when a stop arrives, and the introduction page comes and goes underneath this effect.
-    LaunchedEffect(isResume, allStops, introPages) {
-        if (!isResume) return@LaunchedEffect
-        // Reading the introduction is the walker's own choice of page, and it outranks the session.
-        if (wantsIntroduction) return@LaunchedEffect
-        // An arrival, not the current stop.
-        //
-        // Following currentStopId mirrored the session back into the pager while the pager was
-        // already telling the session which stop was showing (settled page -> playStop ->
-        // currentStopId -> scroll). Two effects steering the same thing in opposite directions
-        // oscillate the moment they disagree, which they did on resume: the recorded stop against
-        // the nearest one. arrivedStopId is one-shot, so it moves the page once and stops.
-        snapshotFlow { state.arrivedStopId }.collect { id ->
-            if (id == null || !didInitialScroll) return@collect
-            val stopIndex = allStops.indexOfFirst { it.id == id }
-            if (stopIndex >= 0 && stopIndex + introPages != pagerState.currentPage) {
-                pagerState.animateScrollToPage(stopIndex + introPages)
+        when {
+            target == pagerState.currentPage -> landingApplied = true
+            landingApplied -> pagerState.animateScrollToPage(target)
+            else -> {
+                pagerState.scrollToPage(target)
+                landingApplied = true
             }
         }
     }
 
-    // When a tour is running the narration follows the page the walker settles on, so the audio
-    // matches the stop being read. session.state.value is read here rather than the collected
-    // snapshot, and compared with the page's own stop, so a page that is already the current stop is
-    // left alone instead of having its narration restarted.
-    LaunchedEffect(isLive) {
+    // A page settling is what makes its stop current, so the audio and the page stay in step without
+    // either steering the other. The page the screen opens on is the screen arriving rather than the
+    // walker moving, so it is dropped: the landing above is what starts that narration.
+    LaunchedEffect(isLive, pageStops, introPages) {
+        if (!isLive) return@LaunchedEffect
         snapshotFlow { pagerState.settledPage }
-            // The page the screen opens on is the screen arriving, not the walker moving.
             .drop(1)
             .collect { page ->
-                // A negative stop index is the introduction, which has no narration of its own to
-                // start; the null check that already lived here covers it.
-                val id = allStops.getOrNull(stopIndexFor(page))?.id ?: return@collect
-                if (isLive && session.state.value.currentStopId != id) session.playStop(id)
+                // A negative stop index is the introduction, which has no narration of its own.
+                val id = pageStops.getOrNull(stopIndexFor(page))?.id ?: return@collect
+                if (session.state.value.currentStopId != id) session.playStop(id)
             }
     }
 
@@ -371,7 +264,7 @@ fun StopScreen(
     }
     if (showStopList) {
         StopListSheet(
-            stops = allStops,
+            stops = pageStops,
             visitedIds = visitedIds,
             currentStopId = state.currentStopId,
             nextStopId = state.nextStopId,
@@ -383,19 +276,16 @@ fun StopScreen(
             },
             onPick = { picked ->
                 showStopList = false
-                // Jumping around the list slides the pager across rather than pushing a new screen;
-                // the settled page is what makes the stop current while a tour is running.
-                val pickedIndex = allStops.indexOfFirst { it.id == picked }
-                if (pickedIndex >= 0) moveToPage(pickedIndex + introPages)
+                // Jumping around the list slides the pager across; the settled page is what makes the
+                // stop current.
+                pageForStop(picked)?.let { moveToPage(it) }
             },
             onDismiss = { showStopList = false },
         )
     }
 
-    /** Play this stop: advance the tour when one is running, otherwise just audition it. */
-    fun playThisStop(id: String) {
-        if (isLive) session.playStop(id) else session.previewStop(id)
-    }
+    /** Play the stop on screen: the page is the stop, so this is the tour moving to it. */
+    fun playThisStop(id: String) = session.playStop(id)
 
     Scaffold(
         topBar = {
@@ -415,11 +305,11 @@ fun StopScreen(
                                 // looking at.
                                 settledStopIndex < 0 -> "Introduction"
 
-                                isLive && state.stops.isNotEmpty() ->
-                                    "Walking \u00b7 ${state.visitedStopIds.size} of ${state.stops.size} reached"
+                                isLive && pageStops.isNotEmpty() ->
+                                    "Walking \u00b7 ${state.visitedStopIds.size} of ${pageStops.size} reached"
 
-                                allStops.isNotEmpty() && !noStopYet ->
-                                    "Stop ${settledStopIndex + 1} of ${allStops.size}"
+                                pageStops.isNotEmpty() ->
+                                    "Stop ${settledStopIndex + 1} of ${pageStops.size}"
 
                                 else -> ""
                             },
@@ -448,34 +338,28 @@ fun StopScreen(
             )
         },
     ) { innerPadding ->
-        if (allStops.isEmpty()) {
-            // There are no pages to page through until the stops arrive, and the old screen showed
-            // the same line while it waited.
-            Box(Modifier.fillMaxSize().padding(innerPadding).padding(24.dp)) {
-                Text(
-                    text = "Getting your tour ready\u2026",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            // The pager is composed even before it is on the right page, because the landing is a
+            // scroll and a scroll needs a laid-out pager to move. It is simply not drawn until the
+            // landing has been applied: page zero is the introduction, and showing that under a walker
+            // who tapped stop nine is the flash this screen used to have.
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(if (landingApplied) 1f else 0f),
             ) { page ->
                 // Everything this page shows comes from the stop it maps to: the stop itself, whether
                 // that stop is the tour's current one, whether the narration highlighting belongs to
                 // it, and the neighbours it can move to. The introduction page — page zero when the
-                // tour has one — maps to no stop at all and shows the introduction instead. Stop
-                // pages are no longer blanked while it plays, so swiping on to stop one lands on the
-                // stop itself.
+                // tour has one — maps to no stop at all and shows the introduction instead.
                 val stopIndex = stopIndexFor(page)
-                val pageStop = allStops.getOrNull(stopIndex)
+                val pageStop = pageStops.getOrNull(stopIndex)
                 val pageStopId = pageStop?.id
                 val isCurrentStop = pageStopId != null && pageStopId == state.currentStopId
                 val highlightApplies = isCurrentStop && narration.stopId == pageStopId
                 val previousPage = page - 1
-                val nextInRoute = allStops.getOrNull(stopIndex + 1)
+                val nextInRoute = pageStops.getOrNull(stopIndex + 1)
 
                 // The page keeps its scroll position for as long as the screen is open; the
                 // introduction's Next reaches into the page it opens to start it at the top.
@@ -511,20 +395,22 @@ fun StopScreen(
                     item {
                         StopHero(
                             stop = pageStop,
-                            stops = if (isLive) state.stops else allStops,
-                            fallbackPhotoAsset = tourHeroImage,
+                            stops = pageStops,
+                            fallbackPhotoAsset = state.overviewImage,
                             visitedIds = visitedIds,
                             userLat = mapLat,
                             userLng = mapLng,
                             userHeading = compassHeading ?: state.userBearingDegrees,
                             userAccuracyMeters = mapAccuracy,
-                            onOpenStop = { onOpenStop(it.id) },
+                            // Tapping a stop on the map is the same move as swiping to its page; the
+                            // settled page is what makes it current.
+                            onOpenStop = { tapped -> pageForStop(tapped.id)?.let { moveToPage(it) } },
                             // Frame this stop and the next one rather than the entire route: the useful
                             // question on a stop page is "where do I go next", not "where does this walk
                             // go in total".
                             // The whole route while the introduction is what is showing: there is no
                             // "next stop" yet, and the tour as a whole is what the introduction is about.
-                            focusStops = if (noStopYet || stopIndex < 0) {
+                            focusStops = if (stopIndex < 0) {
                                 null
                             } else {
                                 listOfNotNull(pageStop, nextInRoute)
@@ -589,7 +475,7 @@ fun StopScreen(
                                     )
                                     Spacer(Modifier.height(14.dp))
                                     Transcript(
-                                        text = state.overviewText.ifBlank { tourOverviewText },
+                                        text = state.overviewText,
                                         highlightStart = if (overviewPlaying) narration.highlightStart else 0,
                                         highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -610,29 +496,14 @@ fun StopScreen(
                                 Spacer(Modifier.height(12.dp))
                                 Button(
                                     onClick = {
-                                        // Past the introduction, then straight to the first stop:
-                                        // someone skipping it wants to be walking, and leaving them on
-                                        // "no current stop" would present a different dead end.
-                                        val firstStop = allStops.firstOrNull()
-                                        if (firstStop != null) {
-                                            if (isLive) {
-                                                session.skipIntroduction()
-                                                session.playStop(firstStop.id)
-                                            } else {
-                                                // Browsing, so this is the walker setting off.
-                                                // playStop with nothing running answers from wherever
-                                                // they happen to be standing, which put them on whatever
-                                                // stop was nearest instead of the first one.
-                                                session.startTour(tourId, firstStop.id)
-                                            }
-                                        }
-                                        // The walker is moving on by hand, so the landing a resume does
-                                        // must not snap them back to wherever the session has got to.
-                                        didInitialScroll = true
+                                        // Skipping the introduction hands control to the geofences, then
+                                        // shows stop one. Settling on its page starts it, which is what
+                                        // stops the walker being left on the introduction.
+                                        session.skipIntroduction()
                                         // Stop one is a page of its own now: land at its top, the way
                                         // arriving at any stop does.
                                         pageListStates.getOrNull(page + 1)?.requestScrollToItem(0)
-                                        scope.launch { pagerState.animateScrollToPage(page + 1) }
+                                        moveToPage(page + 1)
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
@@ -848,23 +719,6 @@ fun StopScreen(
 
                         item {
                             Column(Modifier.padding(16.dp)) {
-                                if (!isLive) {
-                                    Button(
-                                        onClick = { onStartTour(current.id) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Text("Start the tour from here")
-                                    }
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        text = "Begins straight away at ${current.name}, with no need to walk " +
-                                            "back to the first stop. Stops play automatically as you walk " +
-                                            "into them.",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-
                                 Spacer(Modifier.height(16.dp))
                                 HorizontalDivider()
                                 Spacer(Modifier.height(12.dp))
@@ -903,6 +757,23 @@ fun StopScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Nothing to walk yet, or the pager has not finished landing: say so rather than show a
+            // page the walker did not ask for. Opaque, because it sits over a pager that is drawing.
+            if (!isLive || pageStops.isEmpty() || !landingApplied) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(24.dp),
+                ) {
+                    Text(
+                        text = "Getting your tour ready\u2026",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

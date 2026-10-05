@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -40,17 +41,17 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapEffect
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker as GoogleMarker
 import com.google.maps.android.compose.Polyline as GooglePolyline
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.maps.android.compose.MapEffect
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
 import com.walkingtours.app.BuildConfig
 import com.walkingtours.app.WalkingToursApp
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.maps.DirectionsClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.osmdroid.tileprovider.MapTileProviderBasic
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -82,6 +83,15 @@ private val FORCE_FALLBACK_MAP = false
 
 /** Zoom used when the route is a single point. */
 private const val SINGLE_STOP_ZOOM = 17.0
+
+/**
+ * Zoom a multi-stop map is created with, before its viewport is measured.
+ *
+ * It is only ever the starting camera of a map that is fitted during layout, so it is deliberately
+ * between the two extremes a fit produces here: about 13 for the whole fourteen-stop route and about
+ * 16 for a stop page's current-and-next pair.
+ */
+private const val INITIAL_ROUTE_ZOOM = 15.0
 
 /** Air kept clear on both axes when the whole route is framed, in device pixels. */
 /**
@@ -117,6 +127,15 @@ private const val GOOGLE_FIT_PADDING_Y_DP = 10
 /** See [GOOGLE_FIT_PADDING_X_DP]. Larger because a stop-page hero is a much shorter viewport. */
 private const val GOOGLE_FOCUS_PADDING_X_DP = 32
 private const val GOOGLE_FOCUS_PADDING_Y_DP = 16
+
+/**
+ * How long the Google map has to attach before it is shown regardless.
+ *
+ * The map is held back until then because the SDK's own view is on screen for the frames it spends
+ * starting up. If it never attaches — no Play Services, a key the SDK refuses — that never happens,
+ * and a permanently blank hero would be worse than the map the SDK would eventually have drawn.
+ */
+private const val MAP_REVEAL_FALLBACK_MS = 1_500L
 
 /**
  * The fit never treats an axis as narrower than this fraction of itself. Without it, padding wider
@@ -344,6 +363,10 @@ fun TourMap(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // The stops this map frames: a stop page asks for the stop you are on and the one you walk to
+    // next, everywhere else the whole route.
+    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
+
     val mapView = remember {
         MapView(context).apply {
             // A larger tile cache is the cheapest way to make pinch-zoom smooth: zooming in and back
@@ -358,15 +381,14 @@ fun TourMap(
             setMultiTouchControls(true)
             // osmdroid's own zoom buttons clutter a Compose layout; pinch and double tap remain.
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            controller.setZoom(16.0)
+            // A camera in the right city before the viewport is known. osmdroid starts at (0, 0), so
+            // a map drawn even once before its fit shows the Gulf of Guinea — and in a pager that is
+            // a page full of maps, it did that once per swipe. The exact fit lands during layout,
+            // below; this is only so that nothing can ever catch the default.
+            controller.setZoom(initialZoomFor(fitTargets))
+            fitTargets.midpoint()?.let { (lat, lng) -> controller.setCenter(GeoPoint(lat, lng)) }
         }
     }
-
-    /** Actual laid-out size of the map. Used to gate the one-time zoom-to-fit. */
-    var mapSize by remember { mutableStateOf(IntSize.Zero) }
-
-    /** Route signature already framed, so the camera is only fitted once per route. */
-    var fittedRouteKey by remember { mutableStateOf<String?>(null) }
 
     /** Accuracy circle overlay, kept so it can be replaced rather than accumulating. */
     var accuracyOverlay by remember { mutableStateOf<Polygon?>(null) }
@@ -567,7 +589,12 @@ fun TourMap(
         }
     }
 
-    // Frame the route exactly once per route, and only after the map has a real size.
+    // Frame the route once per route, as soon as its viewport is known.
+    //
+    // The fit runs during layout — from `onSizeChanged`, before the map is drawn — rather than from a
+    // LaunchedEffect after it. A map that is created and then waits a frame for its camera is drawn
+    // at osmdroid's default of (0, 0), and in a pager that meant the whole world flashing up once per
+    // swipe between stops.
     //
     // NOTE: osmdroid's MapView.zoomToBoundingBox is deliberately NOT used here. In 6.1.20 it routes
     // through Projection.getCloserPixel, a binary search that only terminates when the projected
@@ -575,26 +602,26 @@ fun TourMap(
     // converge and spin the main thread until Android raises an ANR — confirmed from device ANR
     // traces. The camera is fitted with a few lines of Web Mercator arithmetic instead, which
     // cannot loop.
-    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    // Keyed on the targets alone: the camera is framed once per route, not once per layout pass. The
-    // viewport that fit is computed against is only known once the map has laid out, which the
-    // LaunchedEffect below waits for.
+    //
+    // Keyed on the targets and the viewport, not on every layout pass: after the first fit the camera
+    // is the walker's to pan and zoom.
     val routeKey = remember(fitTargets) {
         fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
     }
-    LaunchedEffect(routeKey, mapSize) {
-        if (fitTargets.isEmpty()) return@LaunchedEffect
-        if (mapSize.width <= 0 || mapSize.height <= 0) return@LaunchedEffect
-        if (fittedRouteKey == routeKey) return@LaunchedEffect
-        fittedRouteKey = routeKey
+    var fittedKey by remember { mutableStateOf<String?>(null) }
+    fun fitToViewport(size: IntSize) {
+        val key = "$routeKey:${size.width}x${size.height}"
+        if (key == fittedKey) return
+        if (fitTargets.isEmpty() || size.width <= 0 || size.height <= 0) return
+        fittedKey = key
 
         runCatching {
             // osmdroid measures its zoom against the map view in device pixels, which is exactly what
             // the map reports here, so the raw measured viewport is what the fit is given.
             val fit = cameraFitFor(
                 targets = fitTargets,
-                widthPx = mapSize.width.toFloat(),
-                heightPx = mapSize.height.toFloat(),
+                widthPx = size.width.toFloat(),
+                heightPx = size.height.toFloat(),
                 paddingX = (if (focusStops != null) FOCUS_PADDING_X_PX else FIT_PADDING_X_PX).toFloat(),
                 paddingY = (if (focusStops != null) FOCUS_PADDING_Y_PX else FIT_PADDING_Y_PX).toFloat(),
                 topInsetPx = MARKER_SIZE_PX,
@@ -620,7 +647,7 @@ fun TourMap(
         },
         modifier = modifier
             .clipToBounds()
-            .onSizeChanged { mapSize = it },
+            .onSizeChanged { fitToViewport(it) },
     )
 }
 
@@ -653,12 +680,59 @@ private fun GoogleTourMap(
     // Read here rather than inside the fit: this is a composable read and cannot live in a
     // runCatching block. Google's camera is defined in dp, so the fit must be too.
     val density = LocalDensity.current.density
-    val cameraPositionState = rememberCameraPositionState()
+
+    // Same fit targets as the osmdroid map: a stop page asks for the stop you are on and the one you
+    // walk to next; everywhere else the whole route is framed.
+    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
+    val routeKey = remember(fitTargets) {
+        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
+    }
+
+    // Nothing to frame yet — the tour's stops are still loading — so no map is created.
+    //
+    // A Google map takes its camera from this state the moment it attaches: CameraPositionState's
+    // setMap moves the map to getPosition(). A map created while the route is unknown therefore has
+    // nothing to be moved to, and is left at the SDK's own default showing the whole planet at
+    // (0, 0) until the route arrives and the fit runs. That is the flash the introduction opened on.
+    // Waiting for a route costs nothing, because the fit that follows during layout is what the
+    // walker is meant to see either way.
+    if (fitTargets.isEmpty()) return
+
+    val initialCamera = fitTargets.midpoint()?.let { (lat, lng) ->
+        CameraPosition.fromLatLngZoom(
+            LatLng(lat, lng),
+            initialZoomFor(fitTargets).toFloat(),
+        )
+    }
+
+    // The camera the map is created with. Google Maps starts at (0, 0) at world zoom, so a map drawn
+    // even once before its fit shows the planet — and in a page full of maps, that is a flash per
+    // swipe between stops. Setting the position here means the first camera move the SDK makes is
+    // already to the right city; the exact fit follows during layout, before anything is drawn.
+    //
+    // Keyed on the route so the starting camera always belongs to the route being framed: a state
+    // handed back by a page that was left while its route was still unknown would otherwise restore
+    // the default it was saved with and put the planet back on screen.
+    val cameraPositionState = rememberCameraPositionState(key = routeKey) {
+        initialCamera?.let { position = it }
+    }
+
+    // Held out of sight until the map object exists.
+    //
+    // Even with the camera above, a Google map is not obliged to paint it first: the SDK's own view
+    // is on screen for the few frames it spends starting up. That is the whole-planet view the
+    // introduction opened on. Google draws nothing worth seeing until then anyway, so the map stays
+    // invisible until it is attached and looking where it was told to — which MapEffect below marks,
+    // as soon as the map object exists, rather than waiting for tiles to arrive.
+    var mapReady by remember { mutableStateOf(false) }
+    LaunchedEffect(routeKey) {
+        delay(MAP_REVEAL_FALLBACK_MS)
+        mapReady = true
+    }
 
     // Straight hops, shown until the real route arrives and left in place if it never does. A
     // straight line between stops is a poor route but a much better map than no line at all.
     val directPoints = remember(stops) { stops.map { LatLng(it.lat, it.lng) } }
-
     /** The real walking line, empty until Directions answers. */
     var routePoints by remember(stops) { mutableStateOf(emptyList<LatLng>()) }
     LaunchedEffect(stops) {
@@ -668,26 +742,46 @@ private fun GoogleTourMap(
     }
     val linePoints = if (routePoints.size >= 2) routePoints else directPoints
 
-    /** Actual laid-out size of the map. Used to gate the one-time camera fit. */
-    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    // Set the exact camera from the measured viewport, during layout.
+    //
+    // Assigning cameraPositionState.position settles the camera either way: before the map object
+    // exists it is stored and applied the moment it does, and afterwards it moves the camera
+    // directly. So the fit can run here, synchronously, rather than from a MapEffect a frame later —
+    // which is what left one frame of the world map on screen per page.
+    //
+    // Keyed on the targets and the viewport, not on every layout pass: after the first fit the camera
+    // is the walker's to pan and zoom.
+    var fittedKey by remember { mutableStateOf<String?>(null) }
+    fun fitToViewport(size: IntSize) {
+        val key = "$routeKey:${size.width}x${size.height}"
+        if (key == fittedKey) return
+        if (fitTargets.isEmpty() || size.width <= 0 || size.height <= 0) return
+        fittedKey = key
 
-    /** Route signature already framed, so the camera is only fitted once per route. */
-    var fittedRouteKey by remember { mutableStateOf<String?>(null) }
-
-    // Same fit targets as the osmdroid map: a stop page asks for the stop you are on and the one you
-    // walk to next; everywhere else the whole route is framed.
-    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-    // Keyed on the targets alone, exactly as the osmdroid path is: the camera is framed once per
-    // route, not once per layout pass.
-    val routeKey = remember(fitTargets) {
-        fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
+        runCatching {
+            // The raw measured viewport, in device pixels, exactly as the osmdroid path uses it.
+            // In dp, not pixels: see GOOGLE_FIT_PADDING_X_DP. The viewport and the margin must both
+            // be in the space the SDK's zoom is defined in.
+            val fit = cameraFitFor(
+                targets = fitTargets,
+                widthPx = size.width / density,
+                heightPx = size.height / density,
+                paddingX = (
+                    if (focusStops != null) GOOGLE_FOCUS_PADDING_X_DP else GOOGLE_FIT_PADDING_X_DP
+                    ).toFloat(),
+                paddingY = (
+                    if (focusStops != null) GOOGLE_FOCUS_PADDING_Y_DP else GOOGLE_FIT_PADDING_Y_DP
+                    ).toFloat(),
+                // The badge bitmap is 110 device pixels tall; Google measures in dp.
+                topInsetPx = MARKER_SIZE_PX / density,
+            )
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                LatLng(fit.lat, fit.lng),
+                fit.zoom.toFloat(),
+            )
+        }
     }
 
-    // Applied through MapEffect rather than by assigning cameraPositionState.position from a
-    // LaunchedEffect. MapEffect only runs once the map object actually exists, so the camera is
-    // guaranteed to be there to move; assigning the state earlier could be dropped, which left the
-    // camera at Google's default and made the framing look like it was ignoring the requested
-    // current + next stops.
     // Reuses the osmdroid path's bitmap: the cone is only drawn when there is a compass bearing to
     // rotate it by, otherwise it would sit there claiming the walker faces north. These are plain
     // drawables and are safe to build here; they only become Google icons inside the map below.
@@ -699,8 +793,16 @@ private fun GoogleTourMap(
     GoogleMap(
         modifier = modifier
             .clipToBounds()
-            .onSizeChanged { mapSize = it },
+            .onSizeChanged { fitToViewport(it) }
+            .graphicsLayer { alpha = if (mapReady) 1f else 0f },
         cameraPositionState = cameraPositionState,
+        // The camera goes into the options as well as the state. A map created without one opens on
+        // Google's own default — the whole planet at (0, 0) — and paints it for as long as it takes
+        // the camera to arrive. Given it here, the very first frame the SDK draws is already the
+        // route's own city.
+        googleMapOptionsFactory = {
+            GoogleMapOptions().apply { initialCamera?.let { camera(it) } }
+        },
         // osmdroid's zoom buttons are hidden and the app draws its own position dot, so Google's
         // equivalents — including the "open in Google Maps" toolbar — would be new clutter. Every
         // gesture is left at its default of enabled.
@@ -713,36 +815,9 @@ private fun GoogleTourMap(
         // the box in StopHero that swallows single-pointer pans cancels the gesture instead.
         mapViewFactory = { mapContext, options -> GestureClaimingMapView(mapContext, options) },
     ) {
-        // Runs once the map object exists, so the camera is there to be moved. Placed inside the
-        // map content because MapEffect belongs to the map's own composable scope.
-        MapEffect(routeKey, mapSize) { map ->
-            if (fitTargets.isEmpty()) return@MapEffect
-            if (mapSize.width <= 0 || mapSize.height <= 0) return@MapEffect
-            if (fittedRouteKey == routeKey) return@MapEffect
-            fittedRouteKey = routeKey
-
-            runCatching {
-                // The raw measured viewport, in device pixels, exactly as the osmdroid path uses it.
-                // In dp, not pixels: see GOOGLE_FIT_PADDING_X_DP. The viewport and the margin must
-                // both be in the space the SDK's zoom is defined in.
-                val fit = cameraFitFor(
-                    targets = fitTargets,
-                    widthPx = mapSize.width / density,
-                    heightPx = mapSize.height / density,
-                    paddingX = (
-                        if (focusStops != null) GOOGLE_FOCUS_PADDING_X_DP else GOOGLE_FIT_PADDING_X_DP
-                        ).toFloat(),
-                    paddingY = (
-                        if (focusStops != null) GOOGLE_FOCUS_PADDING_Y_DP else GOOGLE_FIT_PADDING_Y_DP
-                        ).toFloat(),
-                    // The badge bitmap is 110 device pixels tall; Google measures in dp.
-                    topInsetPx = MARKER_SIZE_PX / density,
-                )
-                map.moveCamera(
-                    CameraUpdateFactory.newLatLngZoom(LatLng(fit.lat, fit.lng), fit.zoom.toFloat()),
-                )
-            }
-        }
+        // The map object exists from here on, and maps-compose has already moved it to the camera
+        // this composable set. Nothing is gained by leaving it hidden any longer.
+        MapEffect(Unit) { mapReady = true }
 
         if (linePoints.size >= 2) {
             GooglePolyline(
@@ -829,6 +904,24 @@ private fun GoogleTourMap(
  * `GeoPoint` and a zoom, Google Maps into a `CameraPosition`.
  */
 private data class CameraFit(val lat: Double, val lng: Double, val zoom: Double)
+
+/**
+ * Mean position of [targets], or null when there are none.
+ *
+ * The centre of the box a fit would frame, available before the viewport is known, so a map can be
+ * created somewhere sensible instead of at the engine's default of (0, 0).
+ */
+private fun List<StopEntity>.midpoint(): Pair<Double, Double>? =
+    if (isEmpty()) null else (sumOf { it.lat } / size) to (sumOf { it.lng } / size)
+
+/**
+ * The zoom to create a map of [targets] with.
+ *
+ * Only ever the starting camera of a map that is fitted as soon as it is measured, so it needs to be
+ * a sensible walking zoom rather than an exact one.
+ */
+private fun initialZoomFor(targets: List<StopEntity>): Double =
+    if (targets.size == 1) SINGLE_STOP_ZOOM else INITIAL_ROUTE_ZOOM
 
 /**
  * The one camera fit both engines use: the centre of the box [targets] occupy, and the highest

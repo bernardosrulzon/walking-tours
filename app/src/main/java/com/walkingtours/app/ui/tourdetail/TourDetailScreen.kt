@@ -70,6 +70,10 @@ fun TourDetailScreen(
     tourId: String,
     onBack: () -> Unit,
     onStartTour: () -> Unit,
+    /** Continues a part-finished walk at the first stop still to see. */
+    onResumeTour: () -> Unit,
+    /** Wipes completed stops and begins again. */
+    onStartOver: () -> Unit,
     onOpenStop: (String) -> Unit,
     /** Opens the walk's introduction, which heads the route. */
     onOpenIntroduction: () -> Unit,
@@ -188,10 +192,28 @@ fun TourDetailScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onStartTour, modifier = Modifier.fillMaxWidth()) {
+                    // Three states, one button: nothing done, part done, all done. Once every stop
+                    // is completed there is nothing left to resume to, so it offers to begin again.
+                    val allDone = stops.isNotEmpty() && stops.all { it.id in visited }
+                    Button(
+                        onClick = when {
+                            allDone -> onStartOver
+                            visited.isEmpty() -> onStartTour
+                            // Resume does not replay the introduction: the walker has already begun,
+                            // and what they want is the next stop still to see.
+                            else -> onResumeTour
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (visited.isEmpty()) "Start tour" else "Resume tour")
+                        Text(
+                            when {
+                                allDone -> "Start over"
+                                visited.isEmpty() -> "Start tour"
+                                else -> "Resume tour"
+                            },
+                        )
                     }
                 }
             }

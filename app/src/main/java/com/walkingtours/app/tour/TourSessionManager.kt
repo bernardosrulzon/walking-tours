@@ -59,11 +59,16 @@ class TourSessionManager(
      *   walker taps "Start from here" on a stop, which is the whole point of a walking tour you can
      *   join part-way through: nothing about the tour requires starting at stop one.
      */
-    fun startTour(tourId: String, startAtStopId: String? = null, fromTheTop: Boolean = false) {
+    fun startTour(
+        tourId: String,
+        startAtStopId: String? = null,
+        fromTheTop: Boolean = false,
+        clearProgress: Boolean = false,
+    ) {
         // Restarting from the top is a deliberate act and outranks a session already running;
         // otherwise it is a no-op, so pressing Start tour while a walk was live did nothing and the
         // screen opened at whatever stop the session had reached.
-        if (!fromTheTop && _state.value.tourId == tourId && _state.value.isRunning) return
+        if (!fromTheTop && !clearProgress && _state.value.tourId == tourId && _state.value.isRunning) return
 
         narration.prepare { ok ->
             Log.i(TAG, "Narration engine ready=$ok (${narration.engineLabel})")
@@ -78,6 +83,9 @@ class TourSessionManager(
                 Log.w(TAG, "Tour $tourId has no stops; not starting.")
                 return@launch
             }
+            // Wiping progress has to happen before the visits are read, or the walker starts over
+            // with every stop still suppressed and no geofence can fire.
+            if (clearProgress) repository.resetTour(tourId)
             visited = repository.visitedStopIds(tourId)
 
             val explicitStart = startAtStopId?.let { id -> stops.firstOrNull { it.id == id } }
@@ -92,15 +100,13 @@ class TourSessionManager(
             val firstUnfinished = stops.firstOrNull { it.id !in visited }
             val resumeAt = explicitStart ?: firstUnfinished ?: stops.first()
 
-            // The introduction plays when the walker asks to begin at the start, and otherwise only
-            // on a genuinely first start — not on a resume, and not when they joined at stop 7,
-            // where two minutes of overview first would be obnoxious.
+            // The introduction plays when — and only when — the walker asked to begin at the start.
             //
-            // "Asked to" matters because it used to be inferred from stored progress, so Start tour
-            // quietly became Resume on any phone that had been used before.
-            val isFreshStart = visited.isEmpty() && explicitStart == null
+            // It used to be inferred from stored progress, so Start tour quietly became Resume on
+            // any phone used before, and a resume with nothing completed replayed two minutes of
+            // overview instead of going to the first stop still to see.
             val hasOverview = !tour?.overviewText.isNullOrBlank()
-            val playIntro = (fromTheTop || isFreshStart) && hasOverview
+            val playIntro = fromTheTop && hasOverview
 
             detector.reset()
             // Stops already visited should not fire again just because the user is standing there.

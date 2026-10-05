@@ -37,6 +37,9 @@ object Routes {
      */
     const val INTRO = "intro"
 
+    /** As [INTRO], and wipes what the walker has already completed. */
+    const val START_OVER = "over"
+
     fun tourDetail(tourId: String) = "tour/$tourId"
 
     fun stop(tourId: String, stopId: String) = "tour/$tourId/stop?stopId=$stopId"
@@ -90,6 +93,12 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
             TourDetailScreen(
                 tourId = tourId,
                 onBack = { navController.popBackStack() },
+                // Plain resume: no introduction, and it lands on the first stop still to see.
+                onResumeTour = { navController.navigate(Routes.resumeTouring(tourId)) },
+                onStartOver = {
+                    onRequestLocationPermission()
+                    navController.navigate(Routes.resumeTouring(tourId, Routes.START_OVER))
+                },
                 onStartTour = {
                     // Geofencing needs location, so ask at the moment the user actually starts
                     // walking rather than at first launch.

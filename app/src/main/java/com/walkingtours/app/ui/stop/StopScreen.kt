@@ -135,7 +135,8 @@ fun StopScreen(
 
     // Opened from the route list to be read. Not a walk: the tour must not be started, because
     // starting one with no stop named nominates whichever stop the walker is nearest.
-    val wantsIntroduction = startAtStopId == Routes.INTRO
+    val wantsIntroduction = startAtStopId == Routes.INTRO || startAtStopId == Routes.START_OVER
+    val startsOver = startAtStopId == Routes.START_OVER
 
     // "Resume" means: make sure the tour is running, then follow the session's current stop.
     LaunchedEffect(tourId, startAtStopId, isResume) {
@@ -144,7 +145,7 @@ fun StopScreen(
             // Start tour, and the introduction row, both mean begin at the introduction. Said
             // explicitly rather than inferred from progress, and it restarts rather than no-opping,
             // so it works on a phone that has walked this tour before.
-            session.startTour(tourId, fromTheTop = true)
+            session.startTour(tourId, fromTheTop = true, clearProgress = startsOver)
         } else if (state.tourId != tourId || !state.isRunning) {
             session.startTour(tourId, startAtStopId)
         }

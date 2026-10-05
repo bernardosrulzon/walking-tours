@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,9 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -59,6 +58,11 @@ import com.walkingtours.app.ui.components.Pill
 import com.walkingtours.app.ui.components.SectionTitle
 import com.walkingtours.app.ui.components.TourMap
 import com.walkingtours.app.util.Formatters
+
+/**
+ * Height of the overview map, and of the empty panel that holds its place until the tour loads.
+ */
+private val MAP_HEIGHT = 280.dp
 
 /**
  * Everything a walker needs to decide whether to set off: the route on a map, how long it takes,
@@ -138,146 +142,153 @@ fun TourDetailScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 8.dp),
+        // The page scrolls without a lazy list, so that nothing on it leaves the composition
+        // when it goes past — the map above all. A map inside a lazy list is disposed the moment
+        // it scrolls off and built again on the way back, which costs a second of tiles and a
+        // flash of nothing every time the walker looks down the stop list and up again.
+        val scrollState = rememberScrollState()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(innerPadding)
+                .verticalScroll(scrollState),
         ) {
-            item {
-                TourMap(
-                    stops = stops,
-                    visitedIds = visited,
-                    selectedStopId = null,
-                    userLat = mapLat,
-                    userLng = mapLng,
-                    userHeading = compassHeading,
-                    userAccuracyMeters = mapAccuracy,
-                    modifier = Modifier.fillMaxWidth().height(280.dp),
+            TourMap(
+                stops = stops,
+                visitedIds = visited,
+                selectedStopId = null,
+                userLat = mapLat,
+                userLng = mapLng,
+                userHeading = compassHeading,
+                userAccuracyMeters = mapAccuracy,
+                modifier = Modifier.fillMaxWidth().height(MAP_HEIGHT),
+            )
+
+            // Nothing else until the tour arrives. The map above already holds its own dimensions —
+            // an empty panel when there is no route to frame yet — and a headline reading
+            // "Loading…" over a screen of zeroes is a worse answer than an empty page that fills
+            // in a moment later.
+            if (tourEntity == null) return@Column
+
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = tourEntity?.title ?: "Loading\u2026",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
                 )
-            }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = tourEntity?.summary.orEmpty(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(14.dp))
 
-            item {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        text = tourEntity?.title ?: "Loading\u2026",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill("${stops.size} stops", icon = Icons.Filled.Place)
+                    Pill(
+                        "${tourEntity?.distanceKm ?: 0.0} km",
+                        icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = tourEntity?.summary.orEmpty(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Pill(
+                        Formatters.duration(tourEntity?.totalWalkMinutes ?: 0) + " walking",
+                        icon = Icons.Filled.Schedule,
                     )
-                    Spacer(Modifier.height(14.dp))
+                    Pill(
+                        Formatters.totalExperience(
+                            tourEntity?.totalWalkMinutes ?: 0,
+                            totalStopMinutes,
+                        ) + " with visits",
+                    )
+                }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill("${stops.size} stops", icon = Icons.Filled.Place)
-                        Pill(
-                            "${tourEntity?.distanceKm ?: 0.0} km",
-                            icon = Icons.AutoMirrored.Filled.DirectionsWalk,
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill(
-                            Formatters.duration(tourEntity?.totalWalkMinutes ?: 0) + " walking",
-                            icon = Icons.Filled.Schedule,
-                        )
-                        Pill(
-                            Formatters.totalExperience(
-                                tourEntity?.totalWalkMinutes ?: 0,
-                                totalStopMinutes,
-                            ) + " with visits",
-                        )
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    // Three states, one button: nothing done, part done, all done. Once every stop
-                    // is completed there is nothing left to resume to, so it offers to begin again.
-                    val allDone = stops.isNotEmpty() && stops.all { it.id in visited }
-                    Button(
-                        onClick = when {
-                            allDone -> onStartOver
-                            visited.isEmpty() -> onStartTour
-                            // Resume does not replay the introduction: the walker has already begun,
-                            // and what they want is the next stop still to see.
-                            else -> onResumeTour
+                Spacer(Modifier.height(16.dp))
+                // Three states, one button: nothing done, part done, all done. Once every stop
+                // is completed there is nothing left to resume to, so it offers to begin again.
+                val allDone = stops.isNotEmpty() && stops.all { it.id in visited }
+                Button(
+                    onClick = when {
+                        allDone -> onStartOver
+                        visited.isEmpty() -> onStartTour
+                        // Resume does not replay the introduction: the walker has already begun,
+                        // and what they want is the next stop still to see.
+                        else -> onResumeTour
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when {
+                            allDone -> "Start over"
+                            visited.isEmpty() -> "Start tour"
+                            else -> "Resume tour"
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            when {
-                                allDone -> "Start over"
-                                visited.isEmpty() -> "Start tour"
-                                else -> "Resume tour"
-                            },
-                        )
-                    }
+                    )
                 }
             }
 
             // ---- Ticket summary -------------------------------------------------
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    ),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "Tickets and entrance fees",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "${stops.size - ticketed.size} of ${stops.size} stops are free. " +
-                                "${ticketed.size} need a ticket.",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "Tickets and entrance fees",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "Turkish museum prices change frequently, sometimes more than " +
-                                "once a year. Treat every figure in this app as a guide and check " +
-                                "at the gate.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        )
-                        if (ticketed.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
-                            ticketed.forEach { stop ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        text = "${stop.order}. ${stop.name}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        text = stop.entranceFeeTry,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    )
-                                }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "${stops.size - ticketed.size} of ${stops.size} stops are free. " +
+                            "${ticketed.size} need a ticket.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Turkish museum prices change frequently, sometimes more than " +
+                            "once a year. Treat every figure in this app as a guide and check " +
+                            "at the gate.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    if (ticketed.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        ticketed.forEach { stop ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = "${stop.order}. ${stop.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = stop.entranceFeeTry,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                )
                             }
                         }
                     }
@@ -285,70 +296,64 @@ fun TourDetailScreen(
             }
 
             // ---- Practicalities -------------------------------------------------
-            item {
-                Column(Modifier.padding(16.dp)) {
-                    SectionTitle("Know before you go")
-                    tourEntity?.difficulty?.takeIf { it.isNotBlank() }?.let {
-                        LabeledParagraph("Difficulty", it)
-                    }
-                    tourEntity?.bestTimeOfDay?.takeIf { it.isNotBlank() }?.let {
-                        LabeledParagraph("Best time", it)
-                    }
+            Column(Modifier.padding(16.dp)) {
+                SectionTitle("Know before you go")
+                tourEntity?.difficulty?.takeIf { it.isNotBlank() }?.let {
+                    LabeledParagraph("Difficulty", it)
+                }
+                tourEntity?.bestTimeOfDay?.takeIf { it.isNotBlank() }?.let {
+                    LabeledParagraph("Best time", it)
                 }
             }
 
             // ---- Itinerary ------------------------------------------------------
-            item {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    SectionTitle("The route, stop by stop")
-                    Text(
-                        text = "The walk starts with the introduction. Tap any stop to begin there.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                SectionTitle("The route, stop by stop")
+                Text(
+                    text = "The walk starts with the introduction. Tap any stop to begin there.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             // The introduction heads the route rather than hiding behind a toggle: it is the first
             // page of the walk, and tapping it is the same act as pressing Start tour.
             if (tourEntity?.overviewText?.isNotBlank() == true) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clickable(onClick = onStartTour),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Filled.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Introduction", style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    text = "Before you set off",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable(onClick = onStartTour),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Introduction", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "Before you set off",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
             }
 
-            items(stops, key = { it.id }) { stop ->
+            stops.forEach { stop ->
                 StopRow(
                     stop = stop,
                     visited = stop.id in visited,
@@ -356,6 +361,7 @@ fun TourDetailScreen(
                 )
             }
 
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

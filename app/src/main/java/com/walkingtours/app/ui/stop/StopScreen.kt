@@ -1,6 +1,7 @@
 package com.walkingtours.app.ui.stop
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,10 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -82,6 +83,13 @@ import com.walkingtours.app.util.Formatters
 import com.walkingtours.app.util.Geo
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+
+/**
+ * Height of the hero every page carries, and of the empty panel that holds its place before a page
+ * is ready. One value, because the two have to match: the panel is there so that nothing moves when
+ * the real thing arrives.
+ */
+private val HERO_HEIGHT = 240.dp
 
 /**
  * The one screen for walking and for looking at a stop.
@@ -161,10 +169,14 @@ fun StopScreen(
     val scope = rememberCoroutineScope()
 
     // One scroll position per page, held out here rather than inside each page so the introduction's
-    // Next can put stop one back at the top on its way in. A request is not a scroll: the page it
-    // names picks the position up the next time it is measured, whether or not it has been composed.
-    val pageListStates = remember(pageStops.size, introPages) {
-        List(pageStops.size + introPages) { LazyListState() }
+    // Next can put stop one back at the top on its way in.
+    //
+    // ScrollState rather than a lazy list's: the page scrolls, but nothing on it may be taken out of
+    // the composition when it goes past. The map is the reason. A map inside a lazy list is disposed
+    // the moment it scrolls off and built again on the way back, which costs a second of tiles and a
+    // flash of nothing every time the walker looks down at the transcript and up again.
+    val pageScrollStates = remember(pageStops.size, introPages) {
+        List(pageStops.size + introPages) { ScrollState(0) }
     }
 
     // True once the pager has been put on the page the walker asked for. Until then it is still on
@@ -363,124 +375,118 @@ fun StopScreen(
 
                 // The page keeps its scroll position for as long as the screen is open; the
                 // introduction's Next reaches into the page it opens to start it at the top.
-                val listState = pageListStates[page]
+                val scrollState = pageScrollStates[page]
 
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 8.dp),
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState),
                 ) {
                     state.locationIssue?.let { issue ->
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Warning,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = issue,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Filled.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = issue,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
 
-                    item {
-                        StopHero(
-                            stop = pageStop,
-                            stops = pageStops,
-                            fallbackPhotoAsset = state.overviewImage,
-                            visitedIds = visitedIds,
-                            userLat = mapLat,
-                            userLng = mapLng,
-                            userHeading = compassHeading ?: state.userBearingDegrees,
-                            userAccuracyMeters = mapAccuracy,
-                            // Tapping a stop on the map is the same move as swiping to its page; the
-                            // settled page is what makes it current.
-                            onOpenStop = { tapped -> pageForStop(tapped.id)?.let { moveToPage(it) } },
-                            // Frame this stop and the next one rather than the entire route: the useful
-                            // question on a stop page is "where do I go next", not "where does this walk
-                            // go in total".
-                            // The whole route while the introduction is what is showing: there is no
-                            // "next stop" yet, and the tour as a whole is what the introduction is about.
-                            focusStops = if (stopIndex < 0) {
-                                null
-                            } else {
-                                listOfNotNull(pageStop, nextInRoute)
-                            },
-                            heroHeight = 240.dp,
-                            // Walking: the map is what you need. Browsing: the photograph is.
-                            initialPage = if (isLive) 1 else 0,
-                        )
-                    }
+                    StopHero(
+                        stop = pageStop,
+                        stops = pageStops,
+                        fallbackPhotoAsset = state.overviewImage,
+                        visitedIds = visitedIds,
+                        userLat = mapLat,
+                        userLng = mapLng,
+                        userHeading = compassHeading ?: state.userBearingDegrees,
+                        userAccuracyMeters = mapAccuracy,
+                        // Tapping a stop on the map is the same move as swiping to its page; the
+                        // settled page is what makes it current.
+                        onOpenStop = { tapped -> pageForStop(tapped.id)?.let { moveToPage(it) } },
+                        // Frame this stop and the next one rather than the entire route: the useful
+                        // question on a stop page is "where do I go next", not "where does this walk
+                        // go in total".
+                        // The whole route while the introduction is what is showing: there is no
+                        // "next stop" yet, and the tour as a whole is what the introduction is about.
+                        focusStops = if (stopIndex < 0) {
+                            null
+                        } else {
+                            listOfNotNull(pageStop, nextInRoute)
+                        },
+                        heroHeight = HERO_HEIGHT,
+                        // Walking: the map is what you need. Browsing: the photograph is.
+                        initialPage = if (isLive) 1 else 0,
+                    )
 
                     // ---- The city introduction, on its own page ------------------------------------
                     // It stays here for the whole tour, not just while it is speaking: stop one's
                     // Previous leads back to it, and the transport lets the walker hear it again.
                     if (stopIndex < 0) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = "Before you set off",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Text(
-                                        text = "Introduction to the walk",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    NarrationTransport(
-                                        state = if (overviewPlaying) narration.state else NarrationState.IDLE,
-                                        positionMs = if (overviewPlaying) narration.positionMs else 0L,
-                                        durationMs = if (overviewPlaying) narration.durationMs else 0L,
-                                        rate = narration.rate,
-                                        onPlayPause = {
-                                            if (overviewPlaying && isPlaying) {
-                                                session.pauseNarration()
-                                            } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
-                                                session.resumeNarration()
-                                            } else {
-                                                session.playOverview()
-                                            }
-                                        },
-                                        onRewind = { session.skipNarrationBy(-15_000) },
-                                        onForward = { session.skipNarrationBy(15_000) },
-                                        // The neighbouring page, exactly as on a stop page. It used to
-                                        // ask the session for state.nextStop, but during the
-                                        // introduction there is no current stop for that to be
-                                        // relative to, so it answered with whatever stop came next in
-                                        // its own bookkeeping and the button jumped deep into the
-                                        // tour — stop nine, in the owner's case. On the introduction,
-                                        // "next" can only mean the page after it.
-                                        onPrevious = { moveToPage(page - 1) },
-                                        onNext = { moveToPage(page + 1) },
-                                        onSeekFraction = { fraction ->
-                                            session.seekNarrationTo((fraction * narration.durationMs).toLong())
-                                        },
-                                        onRateChange = { session.setNarrationRate(it) },
-                                        message = if (overviewPlaying) narration.message else null,
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                    Transcript(
-                                        text = state.overviewText,
-                                        highlightStart = if (overviewPlaying) narration.highlightStart else 0,
-                                        highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Before you set off",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = "Introduction to the walk",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                NarrationTransport(
+                                    state = if (overviewPlaying) narration.state else NarrationState.IDLE,
+                                    positionMs = if (overviewPlaying) narration.positionMs else 0L,
+                                    durationMs = if (overviewPlaying) narration.durationMs else 0L,
+                                    rate = narration.rate,
+                                    onPlayPause = {
+                                        if (overviewPlaying && isPlaying) {
+                                            session.pauseNarration()
+                                        } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
+                                            session.resumeNarration()
+                                        } else {
+                                            session.playOverview()
+                                        }
+                                    },
+                                    onRewind = { session.skipNarrationBy(-15_000) },
+                                    onForward = { session.skipNarrationBy(15_000) },
+                                    // The neighbouring page, exactly as on a stop page. It used to
+                                    // ask the session for state.nextStop, but during the
+                                    // introduction there is no current stop for that to be
+                                    // relative to, so it answered with whatever stop came next in
+                                    // its own bookkeeping and the button jumped deep into the
+                                    // tour — stop nine, in the owner's case. On the introduction,
+                                    // "next" can only mean the page after it.
+                                    onPrevious = { moveToPage(page - 1) },
+                                    onNext = { moveToPage(page + 1) },
+                                    onSeekFraction = { fraction ->
+                                        session.seekNarrationTo((fraction * narration.durationMs).toLong())
+                                    },
+                                    onRateChange = { session.setNarrationRate(it) },
+                                    message = if (overviewPlaying) narration.message else null,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                Transcript(
+                                    text = state.overviewText,
+                                    highlightStart = if (overviewPlaying) narration.highlightStart else 0,
+                                    highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
                             }
                         }
                     }
@@ -490,173 +496,163 @@ fun StopScreen(
                     // 16 dp inset, a divider, and a full-width button. The introduction runs for
                     // minutes, so there has to be a way past it.
                     if (stopIndex < 0) {
-                        item {
-                            Column(Modifier.padding(16.dp)) {
-                                HorizontalDivider()
-                                Spacer(Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        // Skipping the introduction hands control to the geofences, then
-                                        // shows stop one. Settling on its page starts it, which is what
-                                        // stops the walker being left on the introduction.
-                                        session.skipIntroduction()
-                                        // Stop one is a page of its own now: land at its top, the way
-                                        // arriving at any stop does.
-                                        pageListStates.getOrNull(page + 1)?.requestScrollToItem(0)
-                                        moveToPage(page + 1)
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Text("Next")
-                                }
+                        Column(Modifier.padding(16.dp)) {
+                            HorizontalDivider()
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    // Skipping the introduction hands control to the geofences, then
+                                    // shows stop one. Settling on its page starts it, which is what
+                                    // stops the walker being left on the introduction.
+                                    session.skipIntroduction()
+                                    // Stop one is a page of its own now: land at its top, the way
+                                    // arriving at any stop does.
+                                    pageScrollStates.getOrNull(page + 1)?.let { next -> scope.launch { next.scrollTo(0) } }
+                                    moveToPage(page + 1)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Next")
                             }
                         }
                     }
 
                     // ---- This stop ------------------------------------------------------------------
                     pageStop?.let { current ->
-                        item {
-                            Column(
-                                Modifier.padding(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    // A little air under the photograph or map, so the title reads as a
-                                    // separate block rather than as a caption printed on the image.
-                                    top = 20.dp,
-                                ),
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Ticking this marks the stop as reached, which is what the "I am here
-                                    // now" button used to do — but it also works before the trip, when you
-                                    // are reading ahead rather than standing in front of the thing.
-                                    VisitedCheck(
-                                        checked = current.id in visitedIds,
-                                        onCheckedChange = { session.setStopVisited(tourId, current.id, it) },
-                                        number = current.order,
-                                    )
-                                    Spacer(Modifier.width(16.dp))
-                                    Column {
-                                        Text(
-                                            text = current.category,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                        Text(
-                                            text = current.name,
-                                            style = MaterialTheme.typography.headlineSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(6.dp))
-                                NarrationTransport(
-                                    state = if (highlightApplies) narration.state else NarrationState.IDLE,
-                                    positionMs = if (highlightApplies) narration.positionMs else 0L,
-                                    durationMs = if (highlightApplies) narration.durationMs else 0L,
-                                    rate = narration.rate,
-                                    onPlayPause = {
-                                        if (isPlaying && highlightApplies) {
-                                            session.pauseNarration()
-                                        } else if (highlightApplies && narration.state == NarrationState.PAUSED) {
-                                            session.resumeNarration()
-                                        } else {
-                                            playThisStop(current.id)
-                                        }
-                                    },
-                                    onRewind = { session.skipNarrationBy(-15_000) },
-                                    onForward = { session.skipNarrationBy(15_000) },
-                                    onPrevious = { moveToPage(previousPage) },
-                                    onNext = { moveToPage(page + 1) },
-                                    onSeekFraction = { fraction ->
-                                        session.seekNarrationTo((fraction * narration.durationMs).toLong())
-                                    },
-                                    onRateChange = { session.setNarrationRate(it) },
-                                    message = if (highlightApplies) narration.message else null,
+                        Column(
+                            Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                // A little air under the photograph or map, so the title reads as a
+                                // separate block rather than as a caption printed on the image.
+                                top = 20.dp,
+                            ),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Ticking this marks the stop as reached, which is what the "I am here
+                                // now" button used to do — but it also works before the trip, when you
+                                // are reading ahead rather than standing in front of the thing.
+                                VisitedCheck(
+                                    checked = current.id in visitedIds,
+                                    onCheckedChange = { session.setStopVisited(tourId, current.id, it) },
+                                    number = current.order,
                                 )
+                                Spacer(Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = current.category,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = current.name,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(6.dp))
+                            NarrationTransport(
+                                state = if (highlightApplies) narration.state else NarrationState.IDLE,
+                                positionMs = if (highlightApplies) narration.positionMs else 0L,
+                                durationMs = if (highlightApplies) narration.durationMs else 0L,
+                                rate = narration.rate,
+                                onPlayPause = {
+                                    if (isPlaying && highlightApplies) {
+                                        session.pauseNarration()
+                                    } else if (highlightApplies && narration.state == NarrationState.PAUSED) {
+                                        session.resumeNarration()
+                                    } else {
+                                        playThisStop(current.id)
+                                    }
+                                },
+                                onRewind = { session.skipNarrationBy(-15_000) },
+                                onForward = { session.skipNarrationBy(15_000) },
+                                onPrevious = { moveToPage(previousPage) },
+                                onNext = { moveToPage(page + 1) },
+                                onSeekFraction = { fraction ->
+                                    session.seekNarrationTo((fraction * narration.durationMs).toLong())
+                                },
+                                onRateChange = { session.setNarrationRate(it) },
+                                message = if (highlightApplies) narration.message else null,
+                            )
                         }
 
-                        item {
-                            Column(Modifier.padding(16.dp)) {
-                                SectionTitle("Transcript")
-                                Transcript(
-                                    text = current.narration,
-                                    highlightStart = if (highlightApplies) narration.highlightStart else 0,
-                                    highlightEnd = if (highlightApplies) narration.highlightEnd else 0,
-                                )
-                            }
+                        Column(Modifier.padding(16.dp)) {
+                            SectionTitle("Transcript")
+                            Transcript(
+                                text = current.narration,
+                                highlightStart = if (highlightApplies) narration.highlightStart else 0,
+                                highlightEnd = if (highlightApplies) narration.highlightEnd else 0,
+                            )
                         }
 
                         // Visitor information: the reference material that makes this the stop page.
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                ),
-                            ) {
-                                Column(Modifier.padding(16.dp)) {
-                                    SectionTitle("Visitor information")
-                                    InfoRow(
-                                        icon = Icons.Filled.ConfirmationNumber,
-                                        label = "Entrance fee",
-                                        value = buildString {
-                                            append(current.entranceFeeTry)
-                                            if (current.entranceFeeNote.isNotBlank()) {
-                                                append("\n${current.entranceFeeNote}")
-                                            }
-                                        },
-                                    )
-                                    InfoRow(
-                                        icon = Icons.Filled.Schedule,
-                                        label = "Opening hours",
-                                        value = current.openingHours,
-                                    )
-                                    InfoRow(
-                                        icon = Icons.Filled.Place,
-                                        label = "Suggested time here",
-                                        value = "${current.suggestedMinutes} minutes",
-                                    )
-                                    InfoRow(
-                                        icon = Icons.Filled.Info,
-                                        label = "Accessibility",
-                                        value = current.accessibility,
-                                    )
-                                }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                SectionTitle("Visitor information")
+                                InfoRow(
+                                    icon = Icons.Filled.ConfirmationNumber,
+                                    label = "Entrance fee",
+                                    value = buildString {
+                                        append(current.entranceFeeTry)
+                                        if (current.entranceFeeNote.isNotBlank()) {
+                                            append("\n${current.entranceFeeNote}")
+                                        }
+                                    },
+                                )
+                                InfoRow(
+                                    icon = Icons.Filled.Schedule,
+                                    label = "Opening hours",
+                                    value = current.openingHours,
+                                )
+                                InfoRow(
+                                    icon = Icons.Filled.Place,
+                                    label = "Suggested time here",
+                                    value = "${current.suggestedMinutes} minutes",
+                                )
+                                InfoRow(
+                                    icon = Icons.Filled.Info,
+                                    label = "Accessibility",
+                                    value = current.accessibility,
+                                )
                             }
                         }
 
                         current.insiderTip.takeIf { it.isNotBlank() }?.let { tip ->
-                            item {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                    ),
-                                ) {
-                                    Column(Modifier.padding(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Filled.Star,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                text = "Insider tip",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            )
-                                        }
-                                        Spacer(Modifier.height(8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                ),
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.Star,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            text = tip,
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            text = "Insider tip",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         )
                                     }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = tip,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    )
                                 }
                             }
                         }
@@ -664,116 +660,110 @@ fun StopScreen(
                         // Onward directions exist twice over: the curated text from the content, and the
                         // live distance when we actually know where the walker is.
                         current.nextStopDirections.takeIf { it.isNotBlank() }?.let { directions ->
-                            item {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    ),
-                                ) {
-                                    Column(Modifier.padding(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.AutoMirrored.Filled.DirectionsWalk,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(
-                                                text = if (nextInRoute != null) {
-                                                    if (isLive) "Walk to stop ${nextInRoute.order}" else "On to ${nextInRoute.name}"
-                                                } else {
-                                                    "Finishing the tour"
-                                                },
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            )
-                                        }
-                                        if (isLive && isCurrentStop) {
-                                            val distance = state.distanceToNextMeters
-                                            val bearing = state.bearingToNextDegrees
-                                            if (distance != null && bearing != null) {
-                                                Spacer(Modifier.height(6.dp))
-                                                Text(
-                                                    text = "${Geo.formatDistance(distance)} away to the " +
-                                                        "${Geo.compassDirection(bearing)}, about " +
-                                                        "${Formatters.duration(Geo.walkingMinutes(distance))} on foot",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                )
-                                            }
-                                        }
-                                        Spacer(Modifier.height(8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                ),
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.DirectionsWalk,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Spacer(Modifier.width(8.dp))
                                         Text(
-                                            text = directions,
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            text = if (nextInRoute != null) {
+                                                if (isLive) "Walk to stop ${nextInRoute.order}" else "On to ${nextInRoute.name}"
+                                            } else {
+                                                "Finishing the tour"
+                                            },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         )
                                     }
+                                    if (isLive && isCurrentStop) {
+                                        val distance = state.distanceToNextMeters
+                                        val bearing = state.bearingToNextDegrees
+                                        if (distance != null && bearing != null) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "${Geo.formatDistance(distance)} away to the " +
+                                                    "${Geo.compassDirection(bearing)}, about " +
+                                                    "${Formatters.duration(Geo.walkingMinutes(distance))} on foot",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = directions,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
                                 }
                             }
                         }
 
-                        item {
-                            Column(Modifier.padding(16.dp)) {
-                                Spacer(Modifier.height(16.dp))
-                                HorizontalDivider()
-                                Spacer(Modifier.height(12.dp))
+                        Column(Modifier.padding(16.dp)) {
+                            Spacer(Modifier.height(16.dp))
+                            HorizontalDivider()
+                            Spacer(Modifier.height(12.dp))
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    OutlinedButton(
-                                        // On stop one while a tour with an introduction is running
-                                        // this is enabled, and leads back to the introduction page.
-                                        onClick = { moveToPage(previousPage) },
-                                        enabled = previousPage >= 0,
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Previous", maxLines = 1)
-                                    }
-                                    OutlinedButton(
-                                        onClick = { moveToPage(page + 1) },
-                                        enabled = nextInRoute != null,
-                                        modifier = Modifier.weight(1f),
-                                    ) {
-                                        Text("Next", maxLines = 1)
-                                        Spacer(Modifier.width(6.dp))
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.ArrowForward,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                    }
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedButton(
+                                    // On stop one while a tour with an introduction is running
+                                    // this is enabled, and leads back to the introduction page.
+                                    onClick = { moveToPage(previousPage) },
+                                    enabled = previousPage >= 0,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Previous", maxLines = 1)
                                 }
-
+                                OutlinedButton(
+                                    onClick = { moveToPage(page + 1) },
+                                    enabled = nextInRoute != null,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text("Next", maxLines = 1)
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
                             }
+
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
 
-            // Nothing to walk yet, or the pager has not finished landing: say so rather than show a
-            // page the walker did not ask for. Opaque, because it sits over a pager that is drawing.
+            // Nothing to walk yet, or the pager has not finished landing. The place the page will
+            // take is held with an empty panel the height of its hero rather than a line of text:
+            // there is nothing to read yet, and nothing moves when the real page arrives. Opaque,
+            // because it sits over a pager that is drawing.
             if (!isLive || pageStops.isEmpty() || !landingApplied) {
-                Box(
+                Column(
                     Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(24.dp),
+                        .background(MaterialTheme.colorScheme.background),
                 ) {
-                    Text(
-                        text = "Getting your tour ready\u2026",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Box(Modifier.fillMaxWidth().height(HERO_HEIGHT))
                 }
             }
         }

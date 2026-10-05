@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.util.Log
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -320,6 +321,19 @@ fun TourMap(
     selectedStopId: String? = null,
     onStopClick: (StopEntity) -> Unit = {},
 ) {
+    // Nothing to frame yet — the tour's stops are still loading — so no engine is chosen and no map
+    // is created, whichever engine it would have been.
+    //
+    // What the caller's modifier carries is the map's size, so its place is held with an empty panel
+    // of exactly those dimensions: nothing loads, nothing flashes, and the page beneath does not move
+    // when the stops arrive a moment later. The alternative on the Google path was a map created
+    // without a camera, which paints the whole planet at (0, 0) until one reaches it.
+    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
+    if (fitTargets.isEmpty()) {
+        Box(modifier.clipToBounds())
+        return
+    }
+
     // Google Maps needs its key in the manifest at build time, and the README's promise is that the
     // app is fully usable without one. A blank key therefore means "draw the osmdroid map", never
     // "draw a grey square": there is no half-configured Google map.
@@ -363,10 +377,8 @@ fun TourMap(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // The stops this map frames: a stop page asks for the stop you are on and the one you walk to
-    // next, everywhere else the whole route.
-    val fitTargets = focusStops?.takeIf { it.isNotEmpty() } ?: stops
-
+    // The stops this map frames — already established above; a stop page asks for the stop you are
+    // on and the one you walk to next, everywhere else the whole route.
     val mapView = remember {
         MapView(context).apply {
             // A larger tile cache is the cheapest way to make pinch-zoom smooth: zooming in and back
@@ -687,16 +699,6 @@ private fun GoogleTourMap(
     val routeKey = remember(fitTargets) {
         fitTargets.joinToString("|") { "${it.lat},${it.lng}" }
     }
-
-    // Nothing to frame yet — the tour's stops are still loading — so no map is created.
-    //
-    // A Google map takes its camera from this state the moment it attaches: CameraPositionState's
-    // setMap moves the map to getPosition(). A map created while the route is unknown therefore has
-    // nothing to be moved to, and is left at the SDK's own default showing the whole planet at
-    // (0, 0) until the route arrives and the fit runs. That is the flash the introduction opened on.
-    // Waiting for a route costs nothing, because the fit that follows during layout is what the
-    // walker is meant to see either way.
-    if (fitTargets.isEmpty()) return
 
     val initialCamera = fitTargets.midpoint()?.let { (lat, lng) ->
         CameraPosition.fromLatLngZoom(

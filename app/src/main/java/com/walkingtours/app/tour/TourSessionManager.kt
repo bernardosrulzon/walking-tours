@@ -59,8 +59,11 @@ class TourSessionManager(
      *   walker taps "Start from here" on a stop, which is the whole point of a walking tour you can
      *   join part-way through: nothing about the tour requires starting at stop one.
      */
-    fun startTour(tourId: String, startAtStopId: String? = null) {
-        if (_state.value.tourId == tourId && _state.value.isRunning) return
+    fun startTour(tourId: String, startAtStopId: String? = null, fromTheTop: Boolean = false) {
+        // Restarting from the top is a deliberate act and outranks a session already running;
+        // otherwise it is a no-op, so pressing Start tour while a walk was live did nothing and the
+        // screen opened at whatever stop the session had reached.
+        if (!fromTheTop && _state.value.tourId == tourId && _state.value.isRunning) return
 
         narration.prepare { ok ->
             Log.i(TAG, "Narration engine ready=$ok (${narration.engineLabel})")
@@ -78,16 +81,26 @@ class TourSessionManager(
             visited = repository.visitedStopIds(tourId)
 
             val explicitStart = startAtStopId?.let { id -> stops.firstOrNull { it.id == id } }
-            val resumeAt = explicitStart
-                ?: nearestUnvisited(stops, _state.value.userLat, _state.value.userLng)
-                ?: stops.last()
 
-            // The city introduction plays only when the walker begins the tour from the start. If
-            // they deliberately joined at stop 7, making them sit through two minutes of overview
-            // first would be obnoxious.
+            // Where to resume: the first stop not yet completed, in route order.
+            //
+            // Neither the GPS nor a "last stop" marker. The GPS version fell back to the first
+            // remaining stop when there was no fix yet, so starting a tour from another continent
+            // recorded stop one as "where you were"; and both versions sent Resume to whatever stop
+            // had been touched most recently rather than to the next thing still to see, which is
+            // what "resume" means to a walker.
+            val firstUnfinished = stops.firstOrNull { it.id !in visited }
+            val resumeAt = explicitStart ?: firstUnfinished ?: stops.first()
+
+            // The introduction plays when the walker asks to begin at the start, and otherwise only
+            // on a genuinely first start — not on a resume, and not when they joined at stop 7,
+            // where two minutes of overview first would be obnoxious.
+            //
+            // "Asked to" matters because it used to be inferred from stored progress, so Start tour
+            // quietly became Resume on any phone that had been used before.
             val isFreshStart = visited.isEmpty() && explicitStart == null
             val hasOverview = !tour?.overviewText.isNullOrBlank()
-            val playIntro = isFreshStart && hasOverview
+            val playIntro = (fromTheTop || isFreshStart) && hasOverview
 
             detector.reset()
             // Stops already visited should not fire again just because the user is standing there.
@@ -105,7 +118,10 @@ class TourSessionManager(
                 nextStopId = resumeAt.id,
             )
 
-            repository.startOrResumeTour(tourId, resumeAt.id)
+            // Nothing is recorded as "where you were" while the introduction is playing: the walker
+            // has not been anywhere yet, and writing the first stop there is what made a tour started
+            // from another continent look as though stop one had been reached.
+            repository.startOrResumeTour(tourId, resumeAt.id.takeUnless { playIntro })
             observeLocation()
             locationTracker.acquire()
             // Promote to a foreground service so the tour survives the screen going off.
@@ -116,10 +132,13 @@ class TourSessionManager(
                     narration.play(OVERVIEW_ID, tour.overviewText)
                     watchForOverviewEnd()
                 }
-                // Joined at a specific stop: start talking about it straight away, and count it
-                // as reached. Without recording the arrival, the "nearest stop still to see"
-                // guidance would point straight back at the stop the walker is standing on.
-                explicitStart != null -> markArrivedHere(explicitStart.id)
+                // Joined at a specific stop: start talking about it straight away.
+                //
+                // Deliberately not markArrivedHere. Choosing to begin at a stop is not the same as
+                // having stood in front of it, and recording an arrival wrote a visit the walker
+                // had not made — which, now that tapping a stop is a way in, happened on every tap
+                // from anywhere in the world. "I was here" is the checkbox on the stop.
+                explicitStart != null -> playStop(explicitStart.id)
             }
         }
     }
@@ -391,6 +410,9 @@ class TourSessionManager(
             showingOverview = false,
         )
         narration.play(stop.id, stop.narration)
+        // Keep Resume pointing at the stop the walker is actually on. Done here rather than only on
+        // arrival, because stepping through the tour by hand is just as much "where I am".
+        scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stop.id) }
     }
 
     fun pauseNarration() = narration.pause()

@@ -39,6 +39,27 @@ class TourRepository(
 
     suspend fun getStop(stopId: String): StopEntity? = dao.getStop(stopId)
 
+    /** Where the walker was last left, for resuming without asking the GPS where they are. */
+    suspend fun lastStopId(tourId: String): String? = dao.getTourProgress(tourId)?.lastStopId
+
+    /**
+     * Remember the stop the walker is on, so Resume returns there.
+     *
+     * Only an arrival used to record this, so stepping through the tour by hand left the marker
+     * behind — and Resume then replayed the introduction, because nothing said the walk had begun.
+     */
+    suspend fun rememberLastStop(tourId: String, stopId: String) {
+        val existing = dao.getTourProgress(tourId)
+        dao.upsertTourProgress(
+            TourProgressEntity(
+                tourId = tourId,
+                startedAtEpochMs = existing?.startedAtEpochMs ?: System.currentTimeMillis(),
+                lastStopId = stopId,
+                completedAtEpochMs = existing?.completedAtEpochMs,
+            ),
+        )
+    }
+
     suspend fun startOrResumeTour(tourId: String, firstStopId: String?) {
         val existing = dao.getTourProgress(tourId)
         dao.upsertTourProgress(

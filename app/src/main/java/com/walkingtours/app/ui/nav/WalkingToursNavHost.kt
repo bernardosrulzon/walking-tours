@@ -94,7 +94,9 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                     // Geofencing needs location, so ask at the moment the user actually starts
                     // walking rather than at first launch.
                     onRequestLocationPermission()
-                    navController.navigate(Routes.resumeTouring(tourId))
+                    // From the top: the introduction plays even if this tour has been walked
+                    // before, because that is what a button called Start tour promises.
+                    navController.navigate(Routes.resumeTouring(tourId, Routes.INTRO))
                 },
                 // Tapping a stop begins the walk there rather than opening it for reading: the
                 // session turns a named start stop into a real arrival, arms the geofences and

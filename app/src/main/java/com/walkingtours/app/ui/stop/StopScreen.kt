@@ -72,7 +72,6 @@ import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.tour.TourSessionManager
 import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
-import com.walkingtours.app.ui.components.ArrivalBanner
 import com.walkingtours.app.ui.components.InfoRow
 import com.walkingtours.app.ui.components.NarrationTransport
 import com.walkingtours.app.ui.components.Pill
@@ -140,7 +139,13 @@ fun StopScreen(
 
     // "Resume" means: make sure the tour is running, then follow the session's current stop.
     LaunchedEffect(tourId, startAtStopId, isResume) {
-        if (isResume && !wantsIntroduction && (state.tourId != tourId || !state.isRunning)) {
+        if (!isResume) return@LaunchedEffect
+        if (wantsIntroduction) {
+            // Start tour, and the introduction row, both mean begin at the introduction. Said
+            // explicitly rather than inferred from progress, and it restarts rather than no-opping,
+            // so it works on a phone that has walked this tour before.
+            session.startTour(tourId, fromTheTop = true)
+        } else if (state.tourId != tourId || !state.isRunning) {
             session.startTour(tourId, startAtStopId)
         }
     }
@@ -237,7 +242,14 @@ fun StopScreen(
             pagerState.scrollToPage(0)
             return@LaunchedEffect
         }
-        val wanted = stopId ?: state.currentStopId ?: return@LaunchedEffect
+        val wanted = when {
+            stopId != null -> stopId
+            // Resume goes to the first stop still to see, in route order — not to whichever stop the
+            // session last had, which on a phone used before was simply the last one touched.
+            isResume && allStops.isNotEmpty() ->
+                allStops.firstOrNull { it.id !in visitedIds }?.id
+            else -> state.currentStopId
+        } ?: return@LaunchedEffect
         val stopIndex = allStops.indexOfFirst { it.id == wanted }
         if (stopIndex < 0) return@LaunchedEffect
         didInitialScroll = true
@@ -283,12 +295,17 @@ fun StopScreen(
     // when a stop arrives, and the introduction page comes and goes underneath this effect.
     LaunchedEffect(isResume, allStops, introPages) {
         if (!isResume) return@LaunchedEffect
-        // Reading the introduction is the walker's own choice of page, and it outranks the session:
-        // with a walk already running the session always has a stop to name, so following it dragged
-        // them straight off the introduction and onto stop one every time.
+        // Reading the introduction is the walker's own choice of page, and it outranks the session.
         if (wantsIntroduction) return@LaunchedEffect
-        snapshotFlow { state.currentStopId }.collect { id ->
-            if (!didInitialScroll) return@collect
+        // An arrival, not the current stop.
+        //
+        // Following currentStopId mirrored the session back into the pager while the pager was
+        // already telling the session which stop was showing (settled page -> playStop ->
+        // currentStopId -> scroll). Two effects steering the same thing in opposite directions
+        // oscillate the moment they disagree, which they did on resume: the recorded stop against
+        // the nearest one. arrivedStopId is one-shot, so it moves the page once and stops.
+        snapshotFlow { state.arrivedStopId }.collect { id ->
+            if (id == null || !didInitialScroll) return@collect
             val stopIndex = allStops.indexOfFirst { it.id == id }
             if (stopIndex >= 0 && stopIndex + introPages != pagerState.currentPage) {
                 pagerState.animateScrollToPage(stopIndex + introPages)
@@ -485,18 +502,6 @@ fun StopScreen(
                                     text = issue,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                    }
-
-                    // The arrival banner only exists while walking, and only for the stop just reached.
-                    if (state.arrivedStopId != null && state.arrivedStopId == pageStop?.id) {
-                        item {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                                ArrivalBanner(
-                                    stopName = state.arrivedStop?.name.orEmpty(),
-                                    onDismiss = { session.acknowledgeArrival() },
                                 )
                             }
                         }

@@ -45,6 +45,13 @@ class TourSessionManager(
     /** Stops the walker has physically reached, mirrored from the database. */
     private var visited: Set<String> = emptySet()
 
+    /**
+     * Stops whose geofence has already fired this run, plus any started by hand. A stop appears here
+     * at most once, which is what makes an arrival fire once and never again even if the walker
+     * wanders back through its radius.
+     */
+    private var fired: MutableSet<String> = mutableSetOf()
+
     /** When the current tour began. Location fixes older than this are never trusted for arrivals. */
     private var tourStartedAtMs: Long = 0L
 
@@ -128,8 +135,9 @@ class TourSessionManager(
             }
 
             detector.reset()
-            // Stops already visited should not fire again just because the user is standing there.
-            visited.forEach { detector.suppress(it) }
+            // Stops already reached on an earlier run must never fire again; the order rule below
+            // also keeps the geofences on the route the walker is actually walking.
+            fired = visited.toMutableSet()
 
             _state.value = TourSessionState(
                 tourId = tourId,
@@ -224,7 +232,6 @@ class TourSessionManager(
         val current = _state.value
         if (current.overviewText.isBlank()) return
         detector.reset()
-        visited.forEach { detector.suppress(it) }
         _state.value = current.copy(showingOverview = true, currentStopId = null)
         narration.play(OVERVIEW_ID, current.overviewText)
         watchForOverviewEnd()
@@ -314,32 +321,42 @@ class TourSessionManager(
             return
         }
 
-        val arrived = detector.update(stops, lat, lng)
+        // Which stops currently contain the walker, by their arrival radii and with hysteresis.
+        val inside = detector.update(stops, lat, lng)
 
-        // Guidance always aims at the closest stop still to see, so joining the tour part-way
-        // through, or wandering off the route, both behave sensibly.
-        val nextStop = nearestUnvisited(stops, lat, lng)
-        val nextId = nextStop?.id
-        val distance = nextStop?.let { detector.distanceTo(it, lat, lng) }
-        val bearing = nextStop?.let { Geo.bearingDegrees(lat, lng, it.lat, it.lng) }
+        // With two geofences overlapping, the one that fires is the one the walker is nearest to; the
+        // other waits until they are closer to it. So the nearest stop currently inside is the only
+        // candidate, and it is dropped unless the route order allows it and it has not fired before.
+        // Once the walker moves past the first, the second becomes the nearest and fires.
+        val nearestInside = inside.minByOrNull { detector.distanceTo(it, lat, lng) }
+        val candidate = nearestInside?.takeIf { stop ->
+            stop.id !in fired && stop.id !in visited && isNextInOrder(stops, stop)
+        }
 
-        if (arrived != null) {
-            Log.i(TAG, "Arrived at ${arrived.name}")
-            visited = visited + arrived.id
-            // Update the route target to the following stop so the "walk to" card stays useful.
+        // Narration that is already playing is never cut off by a geofence. A stop the walker is
+        // standing in while the previous one talks simply waits: it stays inside on every fix, so it
+        // fires on the first fix after the audio ends, without them having to leave and come back.
+        val audioBusy = narration.progress.value.state == NarrationState.PLAYING ||
+            narration.progress.value.state == NarrationState.PREPARING
+
+        if (candidate != null && !audioBusy) {
+            Log.i(TAG, "Arrived at ${candidate.name}")
+            fired += candidate.id
+            visited = visited + candidate.id
+            // Update the route target to the following stop so the guidance stays useful.
             // Recomputed against the *new* nearest target. Reusing the distance measured to the
             // stop we just reached would report roughly zero metres to the next one.
-            val following = nearestUnvisited(stops, lat, lng, excludeId = arrived.id)
+            val following = nearestUnvisited(stops, lat, lng, excludeId = candidate.id)
             val followingDistance = following?.let { detector.distanceTo(it, lat, lng) }
             val followingBearing = following?.let { Geo.bearingDegrees(lat, lng, it.lat, it.lng) }
-            scope.launch { repository.recordArrival(current.tourId!!, arrived.id) }
+            scope.launch { repository.recordArrival(current.tourId!!, candidate.id) }
             _state.value = current.copy(
                 userLat = lat,
                 userLng = lng,
                 userAccuracyMeters = accuracyMeters,
                 userBearingDegrees = courseDegrees,
                 visitedStopIds = visited,
-                currentStopId = arrived.id,
+                currentStopId = candidate.id,
                 nextStopId = following?.id,
                 distanceToNextMeters = followingDistance,
                 bearingToNextDegrees = followingBearing,
@@ -347,20 +364,35 @@ class TourSessionManager(
                 showingOverview = false,
             )
             // The whole point of the app: reaching a stop starts the audio immediately.
-            playStop(arrived.id)
+            playStop(candidate.id)
             return
         }
 
+        // No arrival to act on: refresh the dot and the guidance only.
+        val nextStop = nearestUnvisited(stops, lat, lng)
         _state.value = current.copy(
             userLat = lat,
             userLng = lng,
             userAccuracyMeters = accuracyMeters,
             userBearingDegrees = courseDegrees,
             visitedStopIds = visited,
-            nextStopId = nextId,
-            distanceToNextMeters = distance,
-            bearingToNextDegrees = bearing,
+            nextStopId = nextStop?.id,
+            distanceToNextMeters = nextStop?.let { detector.distanceTo(it, lat, lng) },
+            bearingToNextDegrees = nextStop?.let { Geo.bearingDegrees(lat, lng, it.lat, it.lng) },
         )
+    }
+
+    /**
+     * True when [stop] is allowed onto the geofence: the first stop of the route, or one whose
+     * immediate predecessor on the route has already been reached or started. This is what stops a
+     * walker standing by stop nine from having it fire while stop two is still the one to see.
+     */
+    private fun isNextInOrder(stops: List<StopEntity>, stop: StopEntity): Boolean {
+        val index = stops.indexOfFirst { it.id == stop.id }
+        if (index < 0) return false
+        if (index == 0) return true
+        val previous = stops[index - 1]
+        return previous.id in visited || previous.id in fired
     }
 
     /** Refresh the map dot and the distance to the next stop without any arrival side effects. */
@@ -405,7 +437,6 @@ class TourSessionManager(
         val lng = current.userLng
         if (lat != null && lng != null) {
             detector.reset()
-            visited.forEach { detector.suppress(it) }
             onPosition(
                 lat = lat,
                 lng = lng,
@@ -425,8 +456,9 @@ class TourSessionManager(
     fun playStop(stopId: String) {
         val current = _state.value
         val stop = current.stops.firstOrNull { it.id == stopId } ?: return
-        // A manual listen must not be interrupted by the geofence firing for the same stop.
-        detector.suppress(stopId)
+        // A manual listen must not be interrupted by the geofence firing for the same stop, and a
+        // stop heard by hand counts as handled for the route-order rule.
+        fired += stopId
         _state.value = current.copy(
             currentStopId = stopId,
             showingOverview = false,
@@ -461,7 +493,7 @@ class TourSessionManager(
         if (current.tourId != tourId) return
 
         visited = if (isVisited) visited + stopId else visited - stopId
-        if (isVisited) detector.suppress(stopId)
+        if (isVisited) fired += stopId
         val next = if (current.stops.isEmpty()) {
             current.nextStopId
         } else {

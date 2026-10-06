@@ -5,11 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Default cloud voice: a Chirp 3: HD British voice, the most natural option Google offers. */
-const val DEFAULT_CLOUD_VOICE = "en-GB-Chirp3-HD-Achernar"
+/** Default cloud voice: a Chirp 3: HD American voice, the most natural option Google offers. */
+const val DEFAULT_CLOUD_VOICE = "en-US-Chirp3-HD-Achernar"
 
 /** Language used for both narration and voice discovery. */
-const val NARRATION_LANGUAGE = "en-GB"
+const val NARRATION_LANGUAGE = "en-US"
 
 /**
  * User-facing AI configuration.

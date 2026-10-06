@@ -99,9 +99,9 @@ class AndroidTtsNarrationEngine(private val context: Context) : NarrationEngine 
 
     private fun configureLanguage() {
         val engine = tts ?: return
-        // Prefer a British voice for the narration's neutral register, but accept any English
+        // Prefer an American voice for the narration's neutral register, but accept any English
         // voice the device actually ships rather than falling back to silence.
-        for (locale in listOf(Locale.UK, Locale.US, Locale.ENGLISH)) {
+        for (locale in listOf(Locale.US, Locale.UK, Locale.ENGLISH)) {
             val result = engine.setLanguage(locale)
             if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
                 break

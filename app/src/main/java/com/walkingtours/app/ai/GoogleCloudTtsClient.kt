@@ -13,7 +13,7 @@ data class CloudVoice(
     /** Chirp 3: HD voices are the newest, most natural generation. */
     val isChirp3Hd: Boolean get() = name.contains("Chirp3", ignoreCase = true)
 
-    /** Short label for the settings list, e.g. "Achernar" from "en-GB-Chirp3-HD-Achernar". */
+    /** Short label for the settings list, e.g. "Achernar" from "en-US-Chirp3-HD-Achernar". */
     val shortName: String get() = name.substringAfterLast('-')
 
     val family: String

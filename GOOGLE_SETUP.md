@@ -147,7 +147,7 @@ With a key present at build time, the cloud voice is switched on automatically.
 ## Step 7 — Choose a voice
 
 In Settings, tap **Load voices**. You will get every voice your account can use for the language
-selected (British English by default). Chirp 3: HD voices are at the top of the list and are the
+selected (American English by default). Chirp 3: HD voices are at the top of the list and are the
 ones worth hearing; `Achernar`, `Aoede` and `Zephyr` are good starting points.
 
 Tap **Test** to hear one, then tap a voice in the list to select it.

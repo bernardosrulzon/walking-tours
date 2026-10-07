@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
@@ -341,6 +342,10 @@ fun TourDetailScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    textAlign = TextAlign.End,
+                                    // Cap the fee column so a long price string cannot squeeze
+                                    // the stop name down to one word per line.
+                                    modifier = Modifier.weight(1f),
                                 )
                             }
                         }

@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "2"
+const val NARRATION_PROMPT_VERSION = "3"
 
 fun guideSignature(guide: Guide?, explorers: List<ExplorerType>, tone: String?): String? =
     guide?.let {
@@ -281,19 +281,24 @@ class GuideController(
         appendLine("You are ${guide.name}. ${guide.tagline}")
         appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
         appendLine("Speak in this style: ${guide.style}")
+        if (!tone.isNullOrBlank()) {
+            appendLine()
+            appendLine("But the walker has redirected you: \"$tone\". Where that conflicts with the persona")
+            appendLine("above, it wins — your voice, your asides, and how you introduce yourself all follow it.")
+            appendLine("Apply it only where it belongs, and keep every fact, name and figure clear; never bend")
+            appendLine("the truth to fit the bit.")
+        }
         if (isIntroduction) {
-            appendLine("This is the walker's introduction to the whole walk. Open by introducing yourself")
-            appendLine("— say who you are, \"${guide.name}\", in character, in your own voice — and welcome")
-            appendLine("them to ${tour?.city ?: "the city"}. Then set up the walk ahead the way you tell things.")
-            appendLine("It should sound like you deciding to walk with them, not like a generic greeting.")
+            appendLine()
+            appendLine("This is the walker's introduction to the whole walk. Open by introducing yourself in")
+            appendLine("the character and voice you are speaking in now, in your own words, and welcome them")
+            appendLine("to ${tour?.city ?: "the city"}. Then set up the walk ahead the way you tell things, not")
+            appendLine("like a generic greeting.")
         }
         if (explorers.isNotEmpty()) {
             appendLine("The walker's interests, in order of priority: ${preferences(explorers)}. Let the first")
             appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")
             appendLine("you get excited about from all of them.")
-        }
-        if (!tone.isNullOrBlank()) {
-            appendLine("The walker has asked you to adjust how you tell it: \"$tone\". Follow that closely.")
         }
         appendLine()
         appendLine("You have complete freedom to rewrite the script however the telling demands. Restructure")

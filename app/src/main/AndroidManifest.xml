@@ -59,6 +59,19 @@
             android:foregroundServiceType="location"
             android:stopWithTask="true" />
 
+        <!-- Hands the camera app a private file to write a captured photo into, for the "take a
+             photo" question. No CAMERA permission is declared, so the system camera app takes the
+             picture under its own permission and simply writes the result to this URI. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

@@ -99,9 +99,9 @@ class TravelChatController(
         }
     }
 
-    fun ask(question: String) {
+    fun ask(question: String, image: InlineImage? = null) {
         val trimmed = question.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty() && image == null) return
         val key = currentKey ?: return
 
         if (!settings.current.hasGeminiKey) {
@@ -110,7 +110,9 @@ class TravelChatController(
         }
 
         val history = conversations[key].orEmpty().toList()
-        append(key, ChatMessage(ChatRole.USER, trimmed))
+        // A photo with no words is still a question, so it gets a placeholder line in the transcript.
+        val shown = trimmed.ifEmpty { "[photo] Tell me about this." }
+        append(key, ChatMessage(ChatRole.USER, shown))
         _state.value = _state.value.copy(isSending = true)
 
         scope.launch {
@@ -119,9 +121,10 @@ class TravelChatController(
                     .also { resolvedModel = it }
                 val answer = geminiClient.generate(
                     model = model,
-                    systemInstruction = buildSystemInstruction(),
+                    systemInstruction = buildSystemInstruction(hasImage = image != null),
                     history = history,
-                    prompt = trimmed,
+                    prompt = trimmed.ifEmpty { "Tell me what you can about this photo." },
+                    images = listOfNotNull(image),
                 )
                 append(key, ChatMessage(ChatRole.ASSISTANT, answer))
                 if (settings.current.speakAiAnswers) speak(answer)
@@ -167,7 +170,7 @@ class TravelChatController(
 
     // ------------------------------------------------------------------ prompt
 
-    private fun buildSystemInstruction(): String {
+    private fun buildSystemInstruction(hasImage: Boolean = false): String {
         val tour = currentTour
         val stop = currentStop
         val city = tour?.city ?: "this city"
@@ -200,6 +203,14 @@ class TravelChatController(
                 if (allStops.isNotEmpty()) {
                     appendLine("- Stops on this tour, in order: ${allStops.joinToString(", ") { it.name }}")
                 }
+            }
+            if (hasImage) {
+                appendLine()
+                appendLine("THE PHOTO")
+                appendLine("- The walker has attached a photo. Say what you can see in it and tie it to this")
+                appendLine("  tour and city: what it is, what it means, and what they would want to know.")
+                appendLine("- If the photo is not travel-related, say briefly that you can only help with the")
+                appendLine("  tour and travel, and do not describe it in detail.")
             }
             appendLine()
             appendLine("HOW TO ANSWER")

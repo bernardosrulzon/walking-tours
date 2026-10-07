@@ -1,11 +1,16 @@
 package com.walkingtours.app.ui.chat
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
@@ -31,11 +36,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -55,15 +64,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.FileProvider
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ai.ChatMessage
 import com.walkingtours.app.ai.ChatRole
+import com.walkingtours.app.ai.InlineImage
 import com.walkingtours.app.ai.Suggestion
 import com.walkingtours.app.ai.TravelChatController
+import com.walkingtours.app.ai.decodePreviewBitmap
+import com.walkingtours.app.ai.loadInlineImage
+import java.io.File
 
 /**
  * The docked "ask" bar.
@@ -177,7 +196,11 @@ fun ChatContent(
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
     var draft by remember { mutableStateOf("") }
+    var pendingImage by remember { mutableStateOf<InlineImage?>(null) }
+    var pendingPreview by remember { mutableStateOf<ImageBitmap?>(null) }
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
 
     // Keep the newest exchange in view as the conversation grows.
     LaunchedEffect(state.messages.size, state.isSending) {
@@ -210,11 +233,53 @@ fun ChatContent(
         runCatching { voiceLauncher.launch(intent) }
     }
 
+    val photoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val loaded = loadInlineImage(context, uri)
+        if (loaded != null) {
+            pendingImage = loaded
+            pendingPreview = decodePreviewBitmap(context, uri)?.asImageBitmap()
+        }
+    }
+
+    fun pickPhoto() {
+        runCatching {
+            photoLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            )
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val uri = pendingCaptureUri
+        if (success && uri != null) {
+            val loaded = loadInlineImage(context, uri)
+            if (loaded != null) {
+                pendingImage = loaded
+                pendingPreview = decodePreviewBitmap(context, uri)?.asImageBitmap()
+            }
+        }
+    }
+
+    fun takePhoto() {
+        runCatching {
+            val uri = createCaptureUri(context)
+            pendingCaptureUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
+
     fun send() {
         val question = draft.trim()
-        if (question.isEmpty()) return
-        controller.ask(question)
+        if (question.isEmpty() && pendingImage == null) return
+        controller.ask(question, pendingImage)
         draft = ""
+        pendingImage = null
+        pendingPreview = null
     }
 
     Column(modifier = modifier.imePadding()) {
@@ -263,11 +328,38 @@ fun ChatContent(
             )
         }
 
+        pendingPreview?.let { preview ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    bitmap = preview,
+                    contentDescription = "Attached photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Photo attached",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { pendingImage = null; pendingPreview = null }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Remove photo")
+                }
+            }
+        }
+
         InputRow(
             draft = draft,
             onDraftChange = { draft = it },
             onSend = { send() },
             onVoice = { startVoiceInput() },
+            onPhoto = { pickPhoto() },
+            onCamera = { takePhoto() },
+            canSend = draft.isNotBlank() || pendingImage != null,
             enabled = !state.needsApiKey && !state.isSending,
         )
     }
@@ -419,8 +511,12 @@ private fun InputRow(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onVoice: () -> Unit,
+    onPhoto: () -> Unit,
+    onCamera: () -> Unit,
+    canSend: Boolean,
     enabled: Boolean,
 ) {
+    var showPhotoMenu by remember { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -443,12 +539,43 @@ private fun InputRow(
                 keyboardActions = KeyboardActions(onSend = { onSend() }),
             )
             Spacer(Modifier.width(6.dp))
+            Box {
+                IconButton(onClick = { showPhotoMenu = true }, enabled = enabled) {
+                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Attach a photo")
+                }
+                DropdownMenu(
+                    expanded = showPhotoMenu,
+                    onDismissRequest = { showPhotoMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Choose a photo") },
+                        onClick = {
+                            showPhotoMenu = false
+                            onPhoto()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Take a photo") },
+                        onClick = {
+                            showPhotoMenu = false
+                            onCamera()
+                        },
+                    )
+                }
+            }
             IconButton(onClick = onVoice, enabled = enabled) {
                 Icon(Icons.Filled.Mic, contentDescription = "Ask by voice")
             }
-            FilledIconButton(onClick = onSend, enabled = enabled && draft.isNotBlank()) {
+            FilledIconButton(onClick = onSend, enabled = enabled && canSend) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
             }
         }
     }
+}
+
+/** A private cache file the camera app writes the capture into, exposed through our FileProvider. */
+private fun createCaptureUri(context: Context): Uri {
+    val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+    val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }

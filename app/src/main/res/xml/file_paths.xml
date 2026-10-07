@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where a captured photo is written before it is read back and sent. Cache, so the system can
+         reclaim it and nothing accumulates in the app's permanent storage. -->
+    <cache-path name="captures" path="captures/" />
+</paths>

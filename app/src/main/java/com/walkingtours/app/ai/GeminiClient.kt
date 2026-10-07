@@ -89,6 +89,8 @@ class GeminiClient(
          * truncates the JSON; passing 0 switches it off. Null leaves the model's default.
          */
         thinkingBudget: Int? = null,
+        /** Images to send with the prompt, e.g. a photo the walker wants identified. */
+        images: List<InlineImage> = emptyList(),
     ): String {
         val key = requireKey()
         val contents = JSONArray().apply {
@@ -103,10 +105,27 @@ class GeminiClient(
                     },
                 )
             }
+            val userParts = JSONArray().apply {
+                if (prompt.isNotBlank()) {
+                    put(JSONObject().put("text", prompt))
+                }
+                images.forEach { image ->
+                    put(
+                        JSONObject().apply {
+                            put(
+                                "inline_data",
+                                JSONObject()
+                                    .put("mime_type", image.mimeType)
+                                    .put("data", image.base64),
+                            )
+                        },
+                    )
+                }
+            }
             put(
                 JSONObject().apply {
                     put("role", "user")
-                    put("parts", JSONArray().put(JSONObject().put("text", prompt)))
+                    put("parts", userParts)
                 },
             )
         }

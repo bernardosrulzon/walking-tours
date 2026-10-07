@@ -27,6 +27,12 @@ data class AiSettingsState(
     val speakAiAnswers: Boolean = false,
     /** Read AI answers aloud through the same narration engine as the tour. */
     val narrationRate: Float = 1.0f,
+    /**
+     * When true, each chapter (the introduction and every stop) starts playing on its own — the
+     * introduction when the tour starts, stops on geofence arrival. When false, chapters only
+     * start when the user presses play.
+     */
+    val autoPlayChapters: Boolean = true,
 ) {
     val hasTtsKey: Boolean get() = ttsApiKey.isNotBlank()
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
@@ -64,6 +70,7 @@ class AiSettings(context: Context) {
             geminiModel = prefs.getString(KEY_GEMINI_MODEL, "") ?: "",
             speakAiAnswers = prefs.getBoolean(KEY_SPEAK_ANSWERS, false),
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
+            autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, true),
         )
     }
 
@@ -78,6 +85,7 @@ class AiSettings(context: Context) {
             .putString(KEY_GEMINI_MODEL, next.geminiModel)
             .putBoolean(KEY_SPEAK_ANSWERS, next.speakAiAnswers)
             .putFloat(KEY_RATE, next.narrationRate)
+            .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
             .apply()
     }
 
@@ -89,6 +97,7 @@ class AiSettings(context: Context) {
         const val KEY_GEMINI_MODEL = "gemini_model"
         const val KEY_SPEAK_ANSWERS = "speak_ai_answers"
         const val KEY_RATE = "narration_rate"
+        const val KEY_AUTO_PLAY = "auto_play_chapters"
     }
 }
 

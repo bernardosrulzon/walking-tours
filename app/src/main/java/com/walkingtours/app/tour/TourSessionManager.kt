@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.walkingtours.app.audio.NarrationEngine
 import com.walkingtours.app.audio.NarrationState
+import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.data.TourRepository
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.location.ArrivalDetector
@@ -32,7 +33,11 @@ class TourSessionManager(
     private val repository: TourRepository,
     private val locationTracker: LocationTracker,
     val narration: NarrationEngine,
+    private val aiSettings: AiSettings,
 ) {
+
+    /** Whether chapters start on their own (arrival/start) or only when the user presses play. */
+    private val autoPlay: Boolean get() = aiSettings.current.autoPlayChapters
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -161,15 +166,20 @@ class TourSessionManager(
             TourForegroundService.start(context)
 
             when {
-                playIntro -> {
+                playIntro && autoPlay -> {
                     narration.play(OVERVIEW_ID, overview)
                     watchForOverviewEnd()
                 }
+                // In manual mode the introduction is still the landing page the walker reads, but
+                // nothing plays until they press play (which arms watchForOverviewEnd) or Next.
+                playIntro -> Unit
                 // Resume lands on a stop the walker is walking towards rather than standing at, so
                 // its narration waits for the geofence to start it on arrival. Every other entry is
                 // a request to hear that stop now.
                 entry == TourEntry.Resume -> Unit
-                landing != null -> playStop(landing.id)
+                // A Stop entry means the walker asked to open that page; in manual mode the page
+                // is all that opens — the narration still waits for a press of play.
+                landing != null -> if (autoPlay) playStop(landing.id) else focusStop(landing.id)
             }
         }
     }
@@ -363,8 +373,15 @@ class TourSessionManager(
                 // Reaching a stop ends the introduction phase.
                 showingOverview = false,
             )
-            // The whole point of the app: reaching a stop starts the audio immediately.
-            playStop(candidate.id)
+            // The whole point of the app: reaching a stop starts the audio immediately — unless the
+            // walker chose manual chapters, in which case the page still moves and the stop is
+            // recorded, but the narration waits for a press of play.
+            if (autoPlay) {
+                playStop(candidate.id)
+            } else {
+                // Keep Resume pointing at the stop the walker is actually on, same as playStop does.
+                scope.launch { repository.rememberLastStop(current.tourId!!, candidate.id) }
+            }
             return
         }
 
@@ -467,6 +484,19 @@ class TourSessionManager(
         // Keep Resume pointing at the stop the walker is actually on. Done here rather than only on
         // arrival, because stepping through the tour by hand is just as much "where I am".
         scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stop.id) }
+    }
+
+    /**
+     * Manual playback: make a stop current and update the tour bookkeeping, but do not start its
+     * narration. The walker pressed nothing toward audio — they only moved to the page — so the
+     * chapter waits for an explicit press of play.
+     */
+    fun focusStop(stopId: String) {
+        val current = _state.value
+        val stop = current.stops.firstOrNull { it.id == stopId } ?: return
+        fired += stopId
+        _state.value = current.copy(currentStopId = stopId, showingOverview = false)
+        scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stopId) }
     }
 
     fun pauseNarration() = narration.pause()

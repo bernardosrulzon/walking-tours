@@ -288,6 +288,35 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            // ---------------------------------------------------------- playback
+            item {
+                SettingsCard(title = "Chapter playback") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Play chapters automatically", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = if (state.autoPlayChapters) {
+                                    "The introduction plays when the tour starts, and each stop's " +
+                                        "narration starts as soon as you arrive."
+                                } else {
+                                    "Nothing plays by itself. The introduction and each stop wait for " +
+                                        "you to press play."
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = state.autoPlayChapters,
+                            onCheckedChange = { on -> settings.update { it.copy(autoPlayChapters = on) } },
+                        )
+                    }
+                }
+            }
+
             // ---------------------------------------------------------- keys
         }
     }

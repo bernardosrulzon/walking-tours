@@ -72,7 +72,7 @@ object ServiceLocator {
     val headingProvider: HeadingProvider by lazy { HeadingProvider(appContext) }
 
     val session: TourSessionManager by lazy {
-        TourSessionManager(appContext, repository, locationTracker, narrationEngine)
+        TourSessionManager(appContext, repository, locationTracker, narrationEngine, aiSettings)
     }
 
     val chat: TravelChatController by lazy {

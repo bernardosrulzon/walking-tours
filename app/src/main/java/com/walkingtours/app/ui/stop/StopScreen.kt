@@ -231,7 +231,15 @@ fun StopScreen(
             .collect { page ->
                 // A negative stop index is the introduction, which has no narration of its own.
                 val id = pageStops.getOrNull(stopIndexFor(page))?.id ?: return@collect
-                if (session.state.value.currentStopId != id) session.playStop(id)
+                if (session.state.value.currentStopId != id) {
+                    // A settled page means the walker went there on purpose: playing it is the
+                    // automatic-chapters behavior, focus-only is the manual one.
+                    if (ServiceLocator.aiSettings.current.autoPlayChapters) {
+                        session.playStop(id)
+                    } else {
+                        session.focusStop(id)
+                    }
+                }
             }
     }
 

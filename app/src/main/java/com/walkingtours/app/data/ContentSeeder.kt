@@ -24,7 +24,9 @@ class ContentSeeder(
 ) {
 
     suspend fun seedIfEmpty() {
-        if (dao.tourCount() > 0) return
+        // Seed any tour whose id is not in the database yet, so a bundle that adds a new tour file
+        // is picked up on the next launch even though the app has run before. Already-seeded tours
+        // are left untouched: progress and settings keyed by tour/stop id keep working.
         val assetNames = try {
             context.assets.list(ASSET_DIR)?.filter { it.endsWith(".json") }.orEmpty()
         } catch (e: IOException) {
@@ -42,7 +44,10 @@ class ContentSeeder(
                 val json = context.assets.open("$ASSET_DIR/$name")
                     .bufferedReader()
                     .use { it.readText() }
-                seedFromJson(JSONObject(json))
+                val root = JSONObject(json)
+                val tourId = root.getJSONObject("tour").getString("id")
+                if (dao.getTour(tourId) != null) continue
+                seedFromJson(root)
             } catch (e: Exception) {
                 // One malformed tour must not stop the others from loading.
                 Log.e(TAG, "Failed to seed tour from $name", e)

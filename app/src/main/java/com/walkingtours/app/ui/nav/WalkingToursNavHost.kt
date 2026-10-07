@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.walkingtours.app.tour.TourEntry
+import com.walkingtours.app.ui.cities.CitiesScreen
 import com.walkingtours.app.ui.settings.SettingsScreen
 import com.walkingtours.app.ui.stop.StopScreen
 import com.walkingtours.app.ui.tourdetail.TourDetailScreen
@@ -18,6 +19,10 @@ import com.walkingtours.app.ui.tourlist.TourListScreen
 
 object Routes {
     const val TOURS = "tours"
+    const val CITIES = "cities"
+    const val CITY_TOURS = "city/{city}/tours"
+
+    fun cityTours(city: String) = "city/${android.net.Uri.encode(city)}/tours"
     const val SETTINGS = "settings"
     const val TOUR_DETAIL = "tour/{tourId}"
 
@@ -40,7 +45,7 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
     val navController = rememberNavController()
     NavHost(
         navController = navController,
-        startDestination = Routes.TOURS,
+        startDestination = Routes.CITIES,
         // A push should look like a push: the incoming screen travels a full width while the
         // outgoing one parallaxes a third of the way out, and going back is the exact reverse.
         //
@@ -73,10 +78,23 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
         },
     ) {
 
-        composable(Routes.TOURS) {
+        composable(Routes.CITIES) {
+            CitiesScreen(
+                onOpenCity = { city -> navController.navigate(Routes.cityTours(city)) },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            )
+        }
+
+        composable(
+            route = Routes.CITY_TOURS,
+            arguments = listOf(navArgument("city") { type = NavType.StringType }),
+        ) { entry ->
+            val city = entry.arguments?.getString("city").orEmpty()
             TourListScreen(
                 onOpenTour = { tourId -> navController.navigate(Routes.tourDetail(tourId)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                city = city,
+                onBack = { navController.popBackStack() },
             )
         }
 

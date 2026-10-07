@@ -20,7 +20,9 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material3.Button
@@ -28,7 +30,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -61,6 +62,9 @@ import com.walkingtours.app.util.Formatters
 fun TourListScreen(
     onOpenTour: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    /** When set, only this city's tours are listed and the top bar gets a back arrow. */
+    city: String? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val repository = ServiceLocator.repository
 
@@ -68,8 +72,9 @@ fun TourListScreen(
     // own once the insert lands, so no manual refresh is needed.
     LaunchedEffect(Unit) { repository.ensureContentLoaded() }
 
-    val tours by remember { repository.observeTours() }
+    val toursAll by remember { repository.observeTours() }
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val tours = if (city == null) toursAll else toursAll.filter { it.city == city }
     val stopCounts by remember { repository.observeStopCounts() }
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -90,12 +95,19 @@ fun TourListScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Walking Tours", fontWeight = FontWeight.SemiBold)
+                        Text(city ?: "Walking Tours", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "AI-guided audio walks",
+                            if (city != null) "${tours.size} tour${if (tours.size == 1) "" else "s"}" else "AI-guided audio walks",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

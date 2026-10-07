@@ -265,7 +265,7 @@ class TourSessionManager(
         narrationJob = scope.launch {
             val line = guide.narration(
                 tourId,
-                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview),
+                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview, isIntroduction = true),
             )
             narration.play(OVERVIEW_ID, line.text, style = line.style)
         }
@@ -285,7 +285,7 @@ class TourSessionManager(
         scope.launch {
             guide.narration(
                 tourId,
-                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview),
+                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview, isIntroduction = true),
             )
         }
     }

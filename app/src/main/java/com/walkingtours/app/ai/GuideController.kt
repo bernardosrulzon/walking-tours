@@ -31,7 +31,13 @@ data class SpokenLine(val text: String, val style: String?)
  * the model is given about what it is rewriting ("Stop 3: German Fountain (Monument)"). [authored]
  * is the text it rewrites, and the fallback if it cannot.
  */
-data class NarrationRequest(val key: String, val context: String, val authored: String)
+data class NarrationRequest(
+    val key: String,
+    val context: String,
+    val authored: String,
+    /** True for the walk's introduction, where the guide should introduce themselves. */
+    val isIntroduction: Boolean = false,
+)
 
 /**
  * The signature a narration is generated under.
@@ -41,9 +47,13 @@ data class NarrationRequest(val key: String, val context: String, val authored: 
  * any of it and the old entries stop matching, so they regenerate; change none of it and the text
  * and its audio are reused.
  */
+/** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
+const val NARRATION_PROMPT_VERSION = "2"
+
 fun guideSignature(guide: Guide?, explorers: List<ExplorerType>, tone: String?): String? =
     guide?.let {
         listOf(
+            NARRATION_PROMPT_VERSION,
             it.id,
             it.style,
             explorers.joinToString(",") { explorer -> explorer.id },
@@ -246,7 +256,7 @@ class GuideController(
         val tour = repository.getTour(tourId)
         val raw = geminiClient.generate(
             model = resolvedModel(),
-            systemInstruction = narrationSystem(tour, guide, persona.explorers, persona.tone(tourId)),
+            systemInstruction = narrationSystem(tour, guide, persona.explorers, persona.tone(tourId), request.isIntroduction),
             history = emptyList(),
             prompt = buildString {
                 appendLine(request.context + ".")
@@ -266,10 +276,17 @@ class GuideController(
         guide: Guide,
         explorers: List<ExplorerType>,
         tone: String?,
+        isIntroduction: Boolean,
     ): String = buildString {
         appendLine("You are ${guide.name}. ${guide.tagline}")
         appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
         appendLine("Speak in this style: ${guide.style}")
+        if (isIntroduction) {
+            appendLine("This is the walker's introduction to the whole walk. Open by introducing yourself")
+            appendLine("— say who you are, \"${guide.name}\", in character, in your own voice — and welcome")
+            appendLine("them to ${tour?.city ?: "the city"}. Then set up the walk ahead the way you tell things.")
+            appendLine("It should sound like you deciding to walk with them, not like a generic greeting.")
+        }
         if (explorers.isNotEmpty()) {
             appendLine("The walker's interests, in order of priority: ${preferences(explorers)}. Let the first")
             appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")

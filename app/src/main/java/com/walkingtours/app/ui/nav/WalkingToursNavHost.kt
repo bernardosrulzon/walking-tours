@@ -203,6 +203,9 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                 tourId = tourId,
                 entry = tourEntry,
                 onBack = { navController.popBackStack() },
+                onOpenPersona = {
+                    navController.navigate(Routes.persona(tourId, start = false, entry = TourEntry.Resume))
+                },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

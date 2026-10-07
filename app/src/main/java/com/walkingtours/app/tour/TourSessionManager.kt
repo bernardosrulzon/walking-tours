@@ -567,6 +567,39 @@ class TourSessionManager(
         }
     }
 
+    /**
+     * Load a stop's narration for reading, without playing it. Used when the guide or the walker's
+     * feedback changes and the page needs the new text without an explicit play.
+     */
+    fun prepareStopNarration(stopId: String) {
+        val current = _state.value
+        val stop = current.stops.firstOrNull { it.id == stopId } ?: return
+        val tourId = current.tourId ?: return
+        scope.launch {
+            guide.narration(
+                tourId,
+                NarrationRequest(stop.id, "Stop ${stop.order}: ${stop.name} (${stop.category})", stop.narration),
+            )
+        }
+    }
+
+    /**
+     * Re-roll a stop's narration after the walker asked for a change: drop the cached text and speak
+     * the new version. A manual action, so it may interrupt what is playing.
+     */
+    fun rerollStop(stopId: String) {
+        val current = _state.value
+        current.tourId?.let { guide.invalidate(it, stopId) }
+        playStop(stopId)
+    }
+
+    /** Re-roll and replay the introduction after the walker tuned it, as [rerollStop] does a stop. */
+    fun rerollOverview() {
+        val tourId = _state.value.tourId ?: return
+        guide.invalidate(tourId, OVERVIEW_ID)
+        playOverview()
+    }
+
     fun pauseNarration() = narration.pause()
 
     fun resumeNarration() = narration.resume()

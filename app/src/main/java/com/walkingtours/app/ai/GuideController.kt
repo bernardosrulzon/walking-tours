@@ -1,5 +1,6 @@
 package com.walkingtours.app.ai
 
+import android.content.Context
 import android.util.Log
 import com.walkingtours.app.data.TourRepository
 import com.walkingtours.app.data.db.StopEntity
@@ -13,11 +14,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** A personalised narration, tagged with the guide that produced it. */
-data class GuideNarration(val guideId: String, val text: String, val style: String?)
+/** A personalised narration, tagged with the signature it was generated under. */
+data class GuideNarration(val signature: String, val text: String, val style: String?)
 
 /** What is handed to the narration engine: the words, and the delivery to perform them with. */
 data class SpokenLine(val text: String, val style: String?)
@@ -32,20 +34,40 @@ data class SpokenLine(val text: String, val style: String?)
 data class NarrationRequest(val key: String, val context: String, val authored: String)
 
 /**
+ * The signature a narration is generated under.
+ *
+ * Everything that should invalidate a cached narration is in here: which guide is telling it, how
+ * that guide speaks, what the walker asked to hear, and any feedback they left for this tour. Change
+ * any of it and the old entries stop matching, so they regenerate; change none of it and the text
+ * and its audio are reused.
+ */
+fun guideSignature(guide: Guide?, explorers: List<ExplorerType>, tone: String?): String? =
+    guide?.let {
+        listOf(
+            it.id,
+            it.style,
+            explorers.joinToString(",") { explorer -> explorer.id },
+            tone.orEmpty(),
+        ).joinToString("|")
+    }
+
+/**
  * The guide personas, and the narration they tell.
  *
- * Two jobs. It proposes five guides for a tour from the walker's explorer answer and where the tour
- * is, and — once a guide is chosen — it rewrites one narration at a time, on demand.
+ * Two jobs. It proposes five guides for a tour from the walker's ranked preferences and where the
+ * tour is, and — once a guide is chosen — it rewrites one narration at a time, on demand.
  *
- * Each rewrite returns both the words and a delivery [style]. The words may carry inline vocal tags
- * (`<laugh>`, `<sigh>`, `<short pause>`) where a moment calls for one; the engine performs them and
- * the screen strips them, so the walker hears the performance and reads clean prose.
+ * Each rewrite returns both the words and a delivery [SpokenLine.style]. The words may carry inline
+ * vocal tags (`<laugh>`, `<sigh>`, `<short pause>`) where a moment calls for one; the engine performs
+ * them and the screen strips them, so the walker hears the performance and reads clean prose.
  *
  * Generation is lazy: a stop is only rewritten when it is about to be played, so a walk that stops
- * early never pays for stops it did not reach. Results are cached, and concurrent asks for the same
- * text share one request.
+ * early never pays for stops it did not reach. Results are cached in memory and on disk, keyed by
+ * the [guideSignature], so they survive the process and are not regenerated while the guide is
+ * unchanged.
  */
 class GuideController(
+    context: Context,
     private val repository: TourRepository,
     private val geminiClient: GeminiClient,
     private val settings: AiSettings,
@@ -53,15 +75,15 @@ class GuideController(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val store = NarrationStore(context.applicationContext)
 
-    private val _narrations = MutableStateFlow<Map<String, GuideNarration>>(emptyMap())
-
-    /** Rewritten narrations by key, tagged with the guide that produced them. */
+    /** Persisted narrations, keyed by "tourId|narrationKey". */
+    private val _narrations = MutableStateFlow(store.load())
     val narrations: StateFlow<Map<String, GuideNarration>> = _narrations.asStateFlow()
 
     private val _loading = MutableStateFlow<Set<String>>(emptySet())
 
-    /** Keys whose rewrite is in flight, so the UI can show a loading state for that stop. */
+    /** Narration keys whose rewrite is in flight, so the UI can show a loading state for that stop. */
     val loading: StateFlow<Set<String>> = _loading.asStateFlow()
 
     /** In-flight rewrites, so two callers asking for the same stop share one model call. */
@@ -69,19 +91,42 @@ class GuideController(
 
     private var model: String? = null
 
-    /**
-     * The guide's version of [key] if it has been generated for the tour's current guide, else the
-     * authored text. Synchronous and safe to call from composition.
-     */
-    fun effectiveNarration(tourId: String, key: String, authored: String): String {
-        val guideId = personaSettings.current.guide(tourId)?.id ?: return authored
-        val cached = _narrations.value[key] ?: return authored
-        return if (cached.guideId == guideId) cached.text else authored
+    /** The signature the current guide, preferences and tone produce for [tourId], or null. */
+    fun signatureFor(tourId: String): String? {
+        val persona = personaSettings.current
+        return guideSignature(persona.guide(tourId), persona.explorers, persona.tone(tourId))
+    }
+
+    private fun cacheKey(tourId: String, key: String) = "$tourId|$key"
+
+    /** True when [key] already has a narration generated under the current signature. */
+    fun hasNarration(tourId: String, key: String): Boolean {
+        val signature = signatureFor(tourId) ?: return false
+        return _narrations.value[cacheKey(tourId, key)]?.signature == signature
     }
 
     /**
-     * Five guide options for [tourId] and this explorer, or the built-in fallbacks when the model
-     * cannot be reached. Never throws.
+     * The guide's version of [key] if it has been generated for the current signature, else the
+     * authored text. Synchronous and safe to call from composition.
+     */
+    fun effectiveNarration(tourId: String, key: String, authored: String): String {
+        val signature = signatureFor(tourId) ?: return authored
+        val cached = _narrations.value[cacheKey(tourId, key)] ?: return authored
+        return if (cached.signature == signature) cached.text else authored
+    }
+
+    /** Forget one generated narration, e.g. to force a re-roll after feedback. */
+    fun invalidate(tourId: String, key: String) {
+        val id = cacheKey(tourId, key)
+        if (_narrations.value.containsKey(id)) {
+            _narrations.value = _narrations.value - id
+            persist()
+        }
+    }
+
+    /**
+     * Five guide options for [tourId] and these ranked preferences, or the built-in fallbacks when
+     * the model cannot be reached. Never throws.
      */
     suspend fun suggestGuides(tourId: String, explorers: List<ExplorerType>): List<Guide> {
         if (!settings.current.hasGeminiKey) return FALLBACK_GUIDES
@@ -97,25 +142,26 @@ class GuideController(
     /**
      * The narration to play for one stop — generated now if it has not been already. Suspends until
      * the text is ready, so the caller can hold the "loading" state for exactly that stop. Falls
-     * back to [NarrationRequest.authored] on any failure, or when no guide has been chosen.
+     * back to [NarrationRequest.authored] on any failure.
      */
     suspend fun narration(tourId: String, request: NarrationRequest): SpokenLine {
-        val guide = personaSettings.current.guide(tourId)
+        val persona = personaSettings.current
+        val guide = persona.guide(tourId)
             ?: return SpokenLine(request.authored, null).also {
                 Log.i(TAG, "No guide for $tourId; authored text for ${request.key}")
             }
-        if (!settings.current.hasGeminiKey) {
-            Log.i(TAG, "No Gemini key; authored text for ${request.key}")
-            return SpokenLine(request.authored, null)
-        }
-        _narrations.value[request.key]
-            ?.takeIf { it.guideId == guide.id }
+        val signature = guideSignature(guide, persona.explorers, persona.tone(tourId))
+            ?: return SpokenLine(request.authored, null)
+        val key = cacheKey(tourId, request.key)
+        _narrations.value[key]
+            ?.takeIf { it.signature == signature }
             ?.let {
                 Log.i(TAG, "Cache hit for ${request.key} (${it.text.length} chars)")
                 return SpokenLine(it.text, it.style)
             }
+        if (!settings.current.hasGeminiKey) return SpokenLine(request.authored, null)
 
-        val jobKey = "${guide.id}|${request.key}"
+        val jobKey = "$signature|$key"
         val deferred = jobs.getOrPut(jobKey) {
             _loading.value = _loading.value + request.key
             scope.async {
@@ -130,18 +176,21 @@ class GuideController(
                     _loading.value = _loading.value - request.key
                     jobs.remove(jobKey)
                 }
-                // Cache only a real rewrite, and only if the guide has not changed underneath us. A
-                // failure is not remembered, so the next play tries again instead of serving the
-                // authored text as if it were the guide's.
-                if (line != null && personaSettings.current.guide(tourId)?.id == guide.id) {
-                    _narrations.value = _narrations.value +
-                        (request.key to GuideNarration(guide.id, line.text, line.style))
-                    Log.i(TAG, "Rewrote ${request.key} for ${guide.id}: ${line.text.length} chars")
+                // Cache only a real rewrite, and only if nothing in the signature changed underneath.
+                if (line != null && signatureFor(tourId) == signature) {
+                    _narrations.value = _narrations.value + (key to GuideNarration(signature, line.text, line.style))
+                    persist()
+                    Log.i(TAG, "Rewrote ${request.key}: ${line.text.length} chars")
                 }
                 line ?: SpokenLine(request.authored, guide.style)
             }
         }
         return deferred.await()
+    }
+
+    private fun persist() {
+        val snapshot = _narrations.value
+        scope.launch(Dispatchers.IO) { store.save(snapshot) }
     }
 
     private suspend fun resolvedModel(): String =
@@ -193,11 +242,11 @@ class GuideController(
             .joinToString("; ")
 
     private suspend fun rewrite(tourId: String, guide: Guide, request: NarrationRequest): SpokenLine {
+        val persona = personaSettings.current
         val tour = repository.getTour(tourId)
-        val explorers = personaSettings.current.explorers
         val raw = geminiClient.generate(
             model = resolvedModel(),
-            systemInstruction = narrationSystem(tour, guide, explorers),
+            systemInstruction = narrationSystem(tour, guide, persona.explorers, persona.tone(tourId)),
             history = emptyList(),
             prompt = buildString {
                 appendLine(request.context + ".")
@@ -210,6 +259,46 @@ class GuideController(
         )
         return parseSpokenLine(raw, guide)
             ?: throw IllegalStateException("The rewrite came back unusable")
+    }
+
+    private fun narrationSystem(
+        tour: TourEntity?,
+        guide: Guide,
+        explorers: List<ExplorerType>,
+        tone: String?,
+    ): String = buildString {
+        appendLine("You are ${guide.name}. ${guide.tagline}")
+        appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
+        appendLine("Speak in this style: ${guide.style}")
+        if (explorers.isNotEmpty()) {
+            appendLine("The walker's interests, in order of priority: ${preferences(explorers)}. Let the first")
+            appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")
+            appendLine("you get excited about from all of them.")
+        }
+        if (!tone.isNullOrBlank()) {
+            appendLine("The walker has asked you to adjust how you tell it: \"$tone\". Follow that closely.")
+        }
+        appendLine()
+        appendLine("You have complete freedom to rewrite the script however the telling demands. Restructure")
+        appendLine("it. Change the emphasis, the order and the framing. Cut what drags, expand what sings,")
+        appendLine("add your own asides, judgements and digressions. It should be unmistakably you, and")
+        appendLine("unmistakably for this walker. If someone heard the original and yours, they should never")
+        appendLine("think they were the same recording.")
+        appendLine()
+        appendLine("The only things to hold on to:")
+        appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
+        appendLine("  or sights that were not there. Reframing is welcome; fabrication is not.")
+        appendLine("- Aim for about three minutes spoken, roughly 400 to 450 words. Shorter beats longer.")
+        appendLine("- Write for the ear: second person, present tense, plain prose. No markdown, no lists,")
+        appendLine("  no headings, no bracketed stage directions.")
+        appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
+        appendLine("  teller would — never a tag in every sentence.")
+        appendLine()
+        appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
+        appendLine("the mood of this stop (for example \"dry and conspiratorial, unhurried\").")
+        appendLine()
+        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
 
     /**
@@ -259,38 +348,6 @@ class GuideController(
             i++
         }
         return out.toString().trim().ifBlank { null }
-    }
-
-    private fun narrationSystem(tour: TourEntity?, guide: Guide, explorers: List<ExplorerType>): String = buildString {
-        appendLine("You are ${guide.name}. ${guide.tagline}")
-        appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
-        appendLine("Speak in this style: ${guide.style}")
-        if (explorers.isNotEmpty()) {
-            appendLine("The walker's interests, in order of priority: ${preferences(explorers)}. Let the first")
-            appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")
-            appendLine("you get excited about from all of them.")
-        }
-        appendLine()
-        appendLine("You have complete freedom to rewrite the script however the telling demands. Restructure")
-        appendLine("it. Change the emphasis, the order and the framing. Cut what drags, expand what sings,")
-        appendLine("add your own asides, judgements and digressions. It should be unmistakably you, and")
-        appendLine("unmistakably for this walker. If someone heard the original and yours, they should never")
-        appendLine("think they were the same recording.")
-        appendLine()
-        appendLine("The only things to hold on to:")
-        appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
-        appendLine("  or sights that were not there. Reframing is welcome; fabrication is not.")
-        appendLine("- Aim for about three minutes spoken, roughly 400 to 450 words. Shorter beats longer.")
-        appendLine("- Write for the ear: second person, present tense, plain prose. No markdown, no lists,")
-        appendLine("  no headings, no bracketed stage directions.")
-        appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
-        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
-        appendLine("  teller would — never a tag in every sentence.")
-        appendLine()
-        appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
-        appendLine("the mood of this stop (for example \"dry and conspiratorial, unhurried\").")
-        appendLine()
-        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
 
     /** The model sometimes wraps JSON in a code fence despite being asked not to. Dig it out. */

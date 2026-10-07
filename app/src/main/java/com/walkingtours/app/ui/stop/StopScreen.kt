@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +37,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -47,8 +50,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -67,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
+import com.walkingtours.app.ai.guideSignature
 import com.walkingtours.app.ai.stripSpeechTags
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
@@ -108,6 +114,7 @@ fun StopScreen(
     /** Which page to land on: the introduction, the first stop still to see, or one stop. */
     entry: TourEntry,
     onBack: () -> Unit,
+    onOpenPersona: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val session = ServiceLocator.session
@@ -122,10 +129,21 @@ fun StopScreen(
     val guideLoading by guide.loading.collectAsStateWithLifecycle()
     val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
 
+    // What every cached narration is keyed by today: the guide, the walker's ranked interests and
+    // any feedback they left. Read from the collected persona, so a change recomposes the page.
+    val narrationSignature = guideSignature(
+        persona.guide(tourId),
+        persona.explorers,
+        persona.tone(tourId),
+    )
+
     fun guideText(key: String, authored: String): String {
-        val guideId = persona.guide(tourId)?.id ?: return authored
-        val cached = guideNarrations[key] ?: return authored
-        return if (cached.guideId == guideId) stripSpeechTags(cached.text) else authored
+        val cached = guideNarrations["$tourId|$key"] ?: return authored
+        return if (narrationSignature != null && cached.signature == narrationSignature) {
+            stripSpeechTags(cached.text)
+        } else {
+            authored
+        }
     }
 
     // The compass only matters while this screen is visible, so it is bound to its lifetime.
@@ -211,6 +229,19 @@ fun StopScreen(
     }
     val settledStop = pageStops.getOrNull(settledStopIndex)
 
+    // When the guide, preferences or feedback change, the current page's cached text no longer
+    // matches. Load the new version for the page to read, without starting it; playback reads the
+    // same cache, so the words and the voice stay in step. Covers the introduction too.
+    LaunchedEffect(narrationSignature, settledStop?.id, isLive, introPages) {
+        if (!isLive) return@LaunchedEffect
+        val id = settledStop?.id
+        if (id != null) {
+            if (!guide.hasNarration(tourId, id)) session.prepareStopNarration(id)
+        } else if (introPages > 0 && !guide.hasNarration(tourId, TourSessionManager.OVERVIEW_ID)) {
+            session.prepareOverviewNarration()
+        }
+    }
+
     // The pager follows the session: the stop the tour is on is the page on screen. The first move is
     // a jump — the walker asked to land somewhere and should not watch the pages scroll past — and
     // every move after that is an animation, so a geofence arrival slides in.
@@ -295,6 +326,7 @@ fun StopScreen(
 
     var showChat by remember { mutableStateOf(false) }
     var showStopList by remember { mutableStateOf(false) }
+    var showTune by remember { mutableStateOf(false) }
 
     if (showChat) {
         ChatBottomSheet(
@@ -323,6 +355,25 @@ fun StopScreen(
                 pageForStop(picked)?.let { moveToPage(it) }
             },
             onDismiss = { showStopList = false },
+        )
+    }
+
+    val tunedStop = settledStop
+    val tuningIntro = tunedStop == null && introPages > 0
+    if (showTune && (tunedStop != null || tuningIntro)) {
+        TuneStopSheet(
+            stopName = tunedStop?.name ?: "the introduction",
+            initialTone = persona.tone(tourId).orEmpty(),
+            onApply = { note ->
+                showTune = false
+                ServiceLocator.personaSettings.setTone(tourId, note)
+                if (tunedStop != null) session.rerollStop(tunedStop.id) else session.rerollOverview()
+            },
+            onChangeGuide = {
+                showTune = false
+                onOpenPersona()
+            },
+            onDismiss = { showTune = false },
         )
     }
 
@@ -472,16 +523,25 @@ fun StopScreen(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         ) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Before you set off",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = "Introduction to the walk",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Before you set off",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Text(
+                                            text = "Introduction to the walk",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    // Same tuning as a stop: change the guide/interests, or leave quick
+                                    // feedback that rewrites this introduction too.
+                                    IconButton(onClick = { showTune = true }) {
+                                        Icon(Icons.Filled.Tune, contentDescription = "Tune the introduction")
+                                    }
+                                }
                                 Spacer(Modifier.height(12.dp))
                                 if (TourSessionManager.OVERVIEW_ID in guideLoading) {
                                     LoadingContent()
@@ -574,7 +634,7 @@ fun StopScreen(
                                     number = current.order,
                                 )
                                 Spacer(Modifier.width(16.dp))
-                                Column {
+                                Column(Modifier.weight(1f)) {
                                     Text(
                                         text = current.category,
                                         style = MaterialTheme.typography.labelLarge,
@@ -585,6 +645,11 @@ fun StopScreen(
                                         style = MaterialTheme.typography.headlineSmall,
                                         fontWeight = FontWeight.SemiBold,
                                     )
+                                }
+                                // Tune the telling for this walk: change the guide or interests, or
+                                // leave quick feedback ("more direct, fewer jokes").
+                                IconButton(onClick = { showTune = true }) {
+                                    Icon(Icons.Filled.Tune, contentDescription = "Tune this stop")
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
@@ -752,6 +817,93 @@ fun StopScreen(
                     Box(Modifier.fillMaxWidth().height(HERO_HEIGHT))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Per-stop tuning: change the guide or the walker's interests, or leave quick feedback that the
+ * guide folds into every rewrite for this tour.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TuneStopSheet(
+    stopName: String,
+    initialTone: String,
+    onApply: (String) -> Unit,
+    onChangeGuide: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var note by remember { mutableStateOf(initialTone) }
+    val quick = listOf(
+        "More direct, fewer jokes",
+        "More facts, fewer asides",
+        "More detail",
+        "Shorter",
+        "More local flavour",
+        "More dramatic",
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = "Tune $stopName",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Tell your guide what to change. It rewrites this walk in the new way, and is " +
+                    "remembered as you go.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                quick.forEach { chip ->
+                    Box(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
+                            .clickable { note = if (note.isBlank()) chip else "$note; $chip" }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text(chip, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Anything else?") },
+                minLines = 2,
+            )
+            Spacer(Modifier.height(14.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onChangeGuide) { Text("Change guide or interests") }
+                Spacer(Modifier.weight(1f))
+                Button(onClick = { onApply(note) }, enabled = note.isNotBlank()) {
+                    Text("Apply")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

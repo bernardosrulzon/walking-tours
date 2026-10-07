@@ -14,18 +14,23 @@ data class PersonaState(
     /** Up to [MAX_EXPLORER_PREFERENCES] answers, most important first. */
     val explorers: List<ExplorerType> = emptyList(),
     val guidesByTour: Map<String, Guide> = emptyMap(),
+    /** Per-tour quick feedback on the telling, folded into every rewrite for that tour. */
+    val toneByTour: Map<String, String> = emptyMap(),
 ) {
     /** The top preference, or null before the question has been answered. */
     val primaryExplorer: ExplorerType? get() = explorers.firstOrNull()
 
     fun guide(tourId: String): Guide? = guidesByTour[tourId]
+
+    fun tone(tourId: String): String? = toneByTour[tourId]?.takeIf { it.isNotBlank() }
 }
 
 /**
- * Persists the persona: the ranked explorer answers (asked once) and the chosen guide per tour.
+ * Persists the persona: the ranked explorer answers (asked once), the chosen guide per tour, and any
+ * per-tour feedback on how the guide should tell it.
  *
  * Kept small and dependency-free like [AiSettings], and separate from it because this is content —
- * who is telling the story — rather than configuration. Nothing here touches the database.
+ * who is telling the story, and how — rather than configuration. Nothing here touches the database.
  */
 class PersonaSettings(context: Context) {
 
@@ -45,14 +50,24 @@ class PersonaSettings(context: Context) {
 
     fun setGuide(tourId: String, guide: Guide) {
         val guides = _state.value.guidesByTour + (tourId to guide)
-        prefs.edit().putString(KEY_GUIDES, encode(guides)).apply()
+        prefs.edit().putString(KEY_GUIDES, encodeGuides(guides)).apply()
         _state.value = _state.value.copy(guidesByTour = guides)
     }
 
     fun clearGuide(tourId: String) {
         val guides = _state.value.guidesByTour - tourId
-        prefs.edit().putString(KEY_GUIDES, encode(guides)).apply()
+        prefs.edit().putString(KEY_GUIDES, encodeGuides(guides)).apply()
         _state.value = _state.value.copy(guidesByTour = guides)
+    }
+
+    fun setTone(tourId: String, tone: String) {
+        val tones = _state.value.toneByTour.toMutableMap()
+        val trimmed = tone.trim()
+        if (trimmed.isBlank()) tones.remove(tourId) else tones[tourId] = trimmed
+        val root = JSONObject()
+        tones.forEach { (id, note) -> root.put(id, note) }
+        prefs.edit().putString(KEY_TONES, root.toString()).apply()
+        _state.value = _state.value.copy(toneByTour = tones)
     }
 
     private fun load(): PersonaState {
@@ -70,17 +85,18 @@ class PersonaSettings(context: Context) {
         }
         return PersonaState(
             explorers = explorers,
-            guidesByTour = decode(prefs.getString(KEY_GUIDES, null)),
+            guidesByTour = decodeGuides(prefs.getString(KEY_GUIDES, null)),
+            toneByTour = decodeTones(prefs.getString(KEY_TONES, null)),
         )
     }
 
-    private fun encode(guides: Map<String, Guide>): String {
+    private fun encodeGuides(guides: Map<String, Guide>): String {
         val root = JSONObject()
         guides.forEach { (tourId, guide) -> root.put(tourId, guide.toJson()) }
         return root.toString()
     }
 
-    private fun decode(raw: String?): Map<String, Guide> {
+    private fun decodeGuides(raw: String?): Map<String, Guide> {
         if (raw.isNullOrBlank()) return emptyMap()
         return runCatching {
             val root = JSONObject(raw)
@@ -94,9 +110,22 @@ class PersonaSettings(context: Context) {
         }.getOrDefault(emptyMap())
     }
 
+    private fun decodeTones(raw: String?): Map<String, String> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val root = JSONObject(raw)
+            buildMap {
+                root.keys().forEach { tourId ->
+                    root.optString(tourId).takeIf { it.isNotBlank() }?.let { put(tourId, it) }
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
+
     private companion object {
         const val KEY_EXPLORERS = "explorer_types"
         const val KEY_LEGACY_EXPLORER = "explorer_type"
         const val KEY_GUIDES = "guides_by_tour"
+        const val KEY_TONES = "tones_by_tour"
     }
 }

@@ -72,7 +72,7 @@ object ServiceLocator {
      * running while the walker moves between screens, and so the cache outlives any one screen.
      */
     val guide: GuideController by lazy {
-        GuideController(repository, geminiClient, aiSettings, personaSettings)
+        GuideController(appContext, repository, geminiClient, aiSettings, personaSettings)
     }
 
     /**

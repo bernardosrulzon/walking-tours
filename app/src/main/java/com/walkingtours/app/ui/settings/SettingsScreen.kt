@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ai.CloudVoice
-import com.walkingtours.app.ai.NARRATION_LANGUAGE
+import com.walkingtours.app.ai.NARRATION_LANGUAGES
 import kotlinx.coroutines.launch
 
 private const val TEST_PHRASE =
@@ -159,10 +159,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 scope.launch {
                                     try {
                                         voices = ServiceLocator.geminiTtsClient
-                                            .listVoices(NARRATION_LANGUAGE)
+                                            .listVoices(state.narrationLanguage)
                                             .sortedWith(compareBy({ it.family }, { it.shortName }))
                                         voiceStatus = if (voices.isEmpty()) {
-                                            "No voices returned for $NARRATION_LANGUAGE."
+                                            "No voices returned for ${state.narrationLanguage}."
                                         } else {
                                             "${voices.size} voices available."
                                         }
@@ -290,6 +290,28 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             // ---------------------------------------------------------- playback
             item {
+                SettingsCard(title = "Narration language") {
+                    Text(
+                        text = "The guide tells the walk and answers questions in this language. " +
+                            "Switching re-tells the stops you already heard.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    NARRATION_LANGUAGES.forEach { (tag, label) ->
+                        LanguageRow(
+                            label = label,
+                            selected = state.narrationLanguage == tag,
+                            onSelect = {
+                                settings.update { it.copy(narrationLanguage = tag) }
+                            },
+                        )
+                    }
+                }
+            }
+
+            // ---------------------------------------------------------- playback
+            item {
                 SettingsCard(title = "Chapter playback") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -390,6 +412,40 @@ private fun StatusLine(text: String, isError: Boolean = false) {
             style = MaterialTheme.typography.labelSmall,
             color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun LanguageRow(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        onClick = onSelect,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            if (selected) {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
     }
 }
 

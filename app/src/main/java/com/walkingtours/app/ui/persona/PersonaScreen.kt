@@ -45,6 +45,7 @@ import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ai.ExplorerType
 import com.walkingtours.app.ai.Guide
 import com.walkingtours.app.ai.MAX_EXPLORER_PREFERENCES
+import com.walkingtours.app.ai.NARRATION_LANGUAGES
 
 /** Which of the two questions is on screen. */
 private enum class Step { EXPLORER, GUIDE }
@@ -66,6 +67,8 @@ fun PersonaScreen(
     val personaSettings = ServiceLocator.personaSettings
     val guideController = ServiceLocator.guide
     val persona by personaSettings.state.collectAsStateWithLifecycle()
+    val aiSettings = ServiceLocator.aiSettings
+    val aiState by aiSettings.state.collectAsStateWithLifecycle()
 
     // The explorer question is skipped once it has been answered, which is what makes it asked
     // exactly once.
@@ -109,6 +112,8 @@ fun PersonaScreen(
                 Step.GUIDE -> GuideStep(
                     explorers = explorers,
                     guides = guides,
+                    language = aiState.narrationLanguage,
+                    onLanguage = { tag -> aiSettings.update { it.copy(narrationLanguage = tag) } },
                     onChangeExplorer = { step = Step.EXPLORER },
                     onPick = { guide ->
                         personaSettings.setGuide(tourId, guide)
@@ -222,6 +227,8 @@ private fun ExplorerStep(
 private fun GuideStep(
     explorers: List<ExplorerType>,
     guides: List<Guide>?,
+    language: String,
+    onLanguage: (String) -> Unit,
     onChangeExplorer: () -> Unit,
     onPick: (Guide) -> Unit,
 ) {
@@ -245,6 +252,43 @@ private fun GuideStep(
         Text("Prefer something else? Change your interests")
     }
     Spacer(Modifier.height(8.dp))
+
+    // The language is chosen with the guide rather than in Settings: this is the moment the
+    // walker decides what they will hear, so the voice and the tongue are picked together.
+    Text(
+        text = "Narration language",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NARRATION_LANGUAGES.forEach { (tag, label) ->
+            val selected = language == tag
+            Card(
+                modifier = Modifier.weight(1f).clickable { onLanguage(tag) },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                ),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
 
     if (guides == null) {
         Column(

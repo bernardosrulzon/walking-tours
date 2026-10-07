@@ -8,8 +8,17 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Default cloud voice: a Gemini 3.8 prebuilt voice. */
 const val DEFAULT_CLOUD_VOICE = "Kore"
 
-/** Language used for both narration and voice discovery. */
+/** Default narration language. */
 const val NARRATION_LANGUAGE = "en-US"
+
+/** Brazilian Portuguese narration. */
+const val NARRATION_LANGUAGE_PT_BR = "pt-BR"
+
+/** The narration languages the app can speak, with their display labels. */
+val NARRATION_LANGUAGES: List<Pair<String, String>> = listOf(
+    NARRATION_LANGUAGE to "English",
+    NARRATION_LANGUAGE_PT_BR to "Português (BR)",
+)
 
 /**
  * User-facing AI configuration.
@@ -33,6 +42,8 @@ data class AiSettingsState(
      * start when the user presses play.
      */
     val autoPlayChapters: Boolean = true,
+    /** BCP 47 tag for the narration language: "en-US" or "pt-BR". */
+    val narrationLanguage: String = NARRATION_LANGUAGE,
 ) {
     val hasTtsKey: Boolean get() = ttsApiKey.isNotBlank()
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
@@ -76,6 +87,8 @@ class AiSettings(context: Context) {
             speakAiAnswers = prefs.getBoolean(KEY_SPEAK_ANSWERS, false),
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
             autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, true),
+            narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
+                .takeIf { it in NARRATION_LANGUAGES.map { (tag, _) -> tag } } ?: NARRATION_LANGUAGE,
         )
     }
 
@@ -91,6 +104,7 @@ class AiSettings(context: Context) {
             .putBoolean(KEY_SPEAK_ANSWERS, next.speakAiAnswers)
             .putFloat(KEY_RATE, next.narrationRate)
             .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
+            .putString(KEY_NARRATION_LANGUAGE, next.narrationLanguage)
             .apply()
     }
 
@@ -103,6 +117,7 @@ class AiSettings(context: Context) {
         const val KEY_SPEAK_ANSWERS = "speak_ai_answers"
         const val KEY_RATE = "narration_rate"
         const val KEY_AUTO_PLAY = "auto_play_chapters"
+        const val KEY_NARRATION_LANGUAGE = "narration_language"
     }
 }
 

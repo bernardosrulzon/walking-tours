@@ -175,11 +175,18 @@ class TravelChatController(
         val stop = currentStop
         val city = tour?.city ?: "this city"
         val country = tour?.country ?: ""
+        val portuguese = settings.current.narrationLanguage == NARRATION_LANGUAGE_PT_BR
 
         return buildString {
             appendLine("You are a warm, well-travelled local guide talking to someone who is walking")
             appendLine("around $city, $country right now with earphones in, using an audio tour app.")
             appendLine("You sound like a knowledgeable friend, not an encyclopaedia.")
+            if (portuguese) {
+                appendLine("Reply in Brazilian Portuguese (português do Brasil). Keep proper names of")
+                appendLine("people, places and monuments in their original form. Write the way a Brazilian")
+                appendLine("would actually speak — never a literal translation of English phrasing;")
+                appendLine("restructure sentences until they sound native.")
+            }
             appendLine()
             appendLine("CURRENT CONTEXT")
             appendLine("- City: $city")

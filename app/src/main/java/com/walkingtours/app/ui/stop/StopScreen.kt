@@ -129,12 +129,15 @@ fun StopScreen(
     val guideLoading by guide.loading.collectAsStateWithLifecycle()
     val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
 
-    // What every cached narration is keyed by today: the guide, the walker's ranked interests and
-    // any feedback they left. Read from the collected persona, so a change recomposes the page.
+    // What every cached narration is keyed by today: the guide, the walker's ranked interests,
+    // any feedback they left, and the narration language. Read from the collected persona (and
+    // settings), so a change recomposes the page.
+    val aiSettings by ServiceLocator.aiSettings.state.collectAsStateWithLifecycle()
     val narrationSignature = guideSignature(
         persona.guide(tourId),
         persona.explorers,
         persona.tone(tourId),
+        aiSettings.narrationLanguage,
     )
 
     fun guideText(key: String, authored: String): String {

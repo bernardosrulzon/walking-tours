@@ -62,8 +62,10 @@ interface NarrationEngine {
     /**
      * Speak [text] for [stopId], replacing anything already playing.
      * [startOffset] supports resuming a paused narration part-way through.
+     * [style] is a sustained delivery direction for voices that take one (e.g. the guide's persona);
+     * engines that cannot use it ignore it.
      */
-    fun play(stopId: String, text: String, startOffset: Int = 0)
+    fun play(stopId: String, text: String, startOffset: Int = 0, style: String? = null)
 
     fun pause()
 

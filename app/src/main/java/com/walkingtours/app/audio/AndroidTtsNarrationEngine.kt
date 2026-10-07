@@ -158,7 +158,7 @@ class AndroidTtsNarrationEngine(private val context: Context) : NarrationEngine 
         })
     }
 
-    override fun play(stopId: String, text: String, startOffset: Int) {
+    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
         val engine = tts
         if (engine == null || !ready.get()) {
             // Cold start race: a geofence can fire seconds after launch, before the speech engine

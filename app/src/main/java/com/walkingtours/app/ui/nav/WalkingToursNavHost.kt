@@ -10,8 +10,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.ui.cities.CitiesScreen
+import com.walkingtours.app.ui.persona.PersonaScreen
 import com.walkingtours.app.ui.settings.SettingsScreen
 import com.walkingtours.app.ui.stop.StopScreen
 import com.walkingtours.app.ui.tourdetail.TourDetailScreen
@@ -35,7 +37,16 @@ object Routes {
      */
     const val STOP = "tour/{tourId}/stop?entry={entry}"
 
+    /**
+     * The persona flow, shown before a walk begins. `entry` is where the walk joins once a guide is
+     * chosen; `start` says whether finishing means "begin that walk" or just "return".
+     */
+    const val PERSONA = "tour/{tourId}/persona?start={start}&entry={entry}"
+
     fun tourDetail(tourId: String) = "tour/$tourId"
+
+    fun persona(tourId: String, start: Boolean, entry: TourEntry) =
+        "tour/$tourId/persona?start=$start&entry=${entry.encode()}"
 
     fun tourEntry(tourId: String, entry: TourEntry) = "tour/$tourId/stop?entry=${entry.encode()}"
 }
@@ -105,31 +116,73 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
         composable(
             route = Routes.TOUR_DETAIL,
             arguments = listOf(navArgument("tourId") { type = NavType.StringType }),
-        ) { entry ->
-            val tourId = entry.arguments?.getString("tourId").orEmpty()
+        ) { navEntry ->
+            val tourId = navEntry.arguments?.getString("tourId").orEmpty()
+
+            // Any way into a walk — Start, Resume, Start over, or a tapped stop — needs a guide the
+            // first time. The entry is carried through the persona flow so the walk joins where the
+            // walker meant to, not always at the introduction.
+            fun enterWalk(entry: TourEntry) {
+                onRequestLocationPermission()
+                if (ServiceLocator.personaSettings.current.guide(tourId) == null) {
+                    navController.navigate(Routes.persona(tourId, start = true, entry = entry))
+                } else {
+                    navController.navigate(Routes.tourEntry(tourId, entry))
+                }
+            }
+
             TourDetailScreen(
                 tourId = tourId,
                 onBack = { navController.popBackStack() },
                 // Every button and every stop row leads to the same screen; the entry says where on
                 // it to land. Starting a walk needs location, so permission is asked here, at the
                 // moment the walker actually sets off, rather than at first launch.
-                onStartTour = {
-                    onRequestLocationPermission()
-                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Introduction))
+                onStartTour = { enterWalk(TourEntry.Introduction) },
+                onOpenPersona = {
+                    navController.navigate(
+                        Routes.persona(tourId, start = false, entry = TourEntry.Resume),
+                    )
                 },
-                onResumeTour = {
-                    onRequestLocationPermission()
-                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Resume))
-                },
-                onStartOver = {
-                    onRequestLocationPermission()
-                    navController.navigate(Routes.tourEntry(tourId, TourEntry.StartOver))
-                },
-                onOpenStop = { stopId ->
-                    onRequestLocationPermission()
-                    navController.navigate(Routes.tourEntry(tourId, TourEntry.Stop(stopId)))
-                },
+                onResumeTour = { enterWalk(TourEntry.Resume) },
+                onStartOver = { enterWalk(TourEntry.StartOver) },
+                onOpenStop = { stopId -> enterWalk(TourEntry.Stop(stopId)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            )
+        }
+
+        composable(
+            route = Routes.PERSONA,
+            arguments = listOf(
+                navArgument("tourId") { type = NavType.StringType },
+                navArgument("start") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+                navArgument("entry") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { navEntry ->
+            val tourId = navEntry.arguments?.getString("tourId").orEmpty()
+            val start = navEntry.arguments?.getBoolean("start") ?: false
+            // Where the walk joins once a guide is chosen — carried in, so Resume resumes.
+            val entry = TourEntry.decode(navEntry.arguments?.getString("entry"))
+            PersonaScreen(
+                tourId = tourId,
+                onBack = { navController.popBackStack() },
+                onDone = {
+                    if (start) {
+                        navController.navigate(Routes.tourEntry(tourId, entry)) {
+                            // The persona flow is a step in starting, not a page to go back to.
+                            popUpTo(Routes.PERSONA) { inclusive = true }
+                        }
+                    } else {
+                        // Arrived from the tour page to change the guide: leave the walker there.
+                        navController.popBackStack()
+                    }
+                },
             )
         }
 

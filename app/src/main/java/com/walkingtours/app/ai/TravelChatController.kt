@@ -50,6 +50,7 @@ class TravelChatController(
     private val geminiClient: GeminiClient,
     private val settings: AiSettings,
     private val narration: NarrationEngine,
+    private val guide: GuideController,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -185,7 +186,7 @@ class TravelChatController(
             }
             if (stop != null) {
                 appendLine("- The walker is currently at stop ${stop.order}: ${stop.name} (${stop.category})")
-                appendLine("- Narration they just heard: \"${stop.narration}\"")
+                appendLine("- Narration they just heard: \"${stripSpeechTags(guide.effectiveNarration(currentTour?.id.orEmpty(), stop.id, stop.narration))}\"")
                 if (stop.entranceFeeTry.isNotBlank()) {
                     appendLine("- Entrance: ${stop.entranceFeeTry}. ${stop.entranceFeeNote}")
                 }

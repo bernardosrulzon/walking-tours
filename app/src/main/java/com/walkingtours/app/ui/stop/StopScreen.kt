@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
+import com.walkingtours.app.ai.stripSpeechTags
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.tour.TourEntry
@@ -111,6 +113,20 @@ fun StopScreen(
     val session = ServiceLocator.session
     val state by session.state.collectAsStateWithLifecycle()
     val narration by session.narration.progress.collectAsStateWithLifecycle()
+
+    // The guide's personalised narration: the rewrite once it has loaded for this tour's guide, the
+    // authored text until then. Collected so the page updates when a rewrite lands or the guide is
+    // changed, and read through guideText so the audio and the transcript always agree.
+    val guide = ServiceLocator.guide
+    val guideNarrations by guide.narrations.collectAsStateWithLifecycle()
+    val guideLoading by guide.loading.collectAsStateWithLifecycle()
+    val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
+
+    fun guideText(key: String, authored: String): String {
+        val guideId = persona.guide(tourId)?.id ?: return authored
+        val cached = guideNarrations[key] ?: return authored
+        return if (cached.guideId == guideId) stripSpeechTags(cached.text) else authored
+    }
 
     // The compass only matters while this screen is visible, so it is bound to its lifetime.
     val headingProvider = ServiceLocator.headingProvider
@@ -229,8 +245,14 @@ fun StopScreen(
         snapshotFlow { pagerState.settledPage }
             .drop(1)
             .collect { page ->
-                // A negative stop index is the introduction, which has no narration of its own.
-                val id = pageStops.getOrNull(stopIndexFor(page))?.id ?: return@collect
+                val index = stopIndexFor(page)
+                if (index < 0) {
+                    // The introduction: load the guide's version for the page to read, but do not
+                    // start it — the transport is there for that.
+                    session.prepareOverviewNarration()
+                    return@collect
+                }
+                val id = pageStops.getOrNull(index)?.id ?: return@collect
                 if (session.state.value.currentStopId != id) {
                     // A settled page means the walker went there on purpose: playing it is the
                     // automatic-chapters behavior, focus-only is the manual one.
@@ -461,44 +483,46 @@ fun StopScreen(
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Spacer(Modifier.height(12.dp))
-                                NarrationTransport(
-                                    state = if (overviewPlaying) narration.state else NarrationState.IDLE,
-                                    positionMs = if (overviewPlaying) narration.positionMs else 0L,
-                                    durationMs = if (overviewPlaying) narration.durationMs else 0L,
-                                    rate = narration.rate,
-                                    onPlayPause = {
-                                        if (overviewPlaying && isPlaying) {
-                                            session.pauseNarration()
-                                        } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
-                                            session.resumeNarration()
-                                        } else {
-                                            session.playOverview()
-                                        }
-                                    },
-                                    onRewind = { session.skipNarrationBy(-15_000) },
-                                    onForward = { session.skipNarrationBy(15_000) },
-                                    // The neighbouring page, exactly as on a stop page. It used to
-                                    // ask the session for state.nextStop, but during the
-                                    // introduction there is no current stop for that to be
-                                    // relative to, so it answered with whatever stop came next in
-                                    // its own bookkeeping and the button jumped deep into the
-                                    // tour — stop nine, in the owner's case. On the introduction,
-                                    // "next" can only mean the page after it.
-                                    onPrevious = { moveToPage(page - 1) },
-                                    onNext = { moveToPage(page + 1) },
-                                    onSeekFraction = { fraction ->
-                                        session.seekNarrationTo((fraction * narration.durationMs).toLong())
-                                    },
-                                    onRateChange = { session.setNarrationRate(it) },
-                                    message = if (overviewPlaying) narration.message else null,
-                                )
-                                Spacer(Modifier.height(14.dp))
-                                Transcript(
-                                    text = state.overviewText,
-                                    highlightStart = if (overviewPlaying) narration.highlightStart else 0,
-                                    highlightEnd = if (overviewPlaying) narration.highlightEnd else 0,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
+                                if (TourSessionManager.OVERVIEW_ID in guideLoading) {
+                                    LoadingContent()
+                                } else {
+                                    NarrationTransport(
+                                        state = if (overviewPlaying) narration.state else NarrationState.IDLE,
+                                        positionMs = if (overviewPlaying) narration.positionMs else 0L,
+                                        durationMs = if (overviewPlaying) narration.durationMs else 0L,
+                                        rate = narration.rate,
+                                        onPlayPause = {
+                                            if (overviewPlaying && isPlaying) {
+                                                session.pauseNarration()
+                                            } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
+                                                session.resumeNarration()
+                                            } else {
+                                                session.playOverview()
+                                            }
+                                        },
+                                        onRewind = { session.skipNarrationBy(-15_000) },
+                                        onForward = { session.skipNarrationBy(15_000) },
+                                        // The neighbouring page, exactly as on a stop page. It used to
+                                        // ask the session for state.nextStop, but during the
+                                        // introduction there is no current stop for that to be
+                                        // relative to, so it answered with whatever stop came next in
+                                        // its own bookkeeping and the button jumped deep into the
+                                        // tour — stop nine, in the owner's case. On the introduction,
+                                        // "next" can only mean the page after it.
+                                        onPrevious = { moveToPage(page - 1) },
+                                        onNext = { moveToPage(page + 1) },
+                                        onSeekFraction = { fraction ->
+                                            session.seekNarrationTo((fraction * narration.durationMs).toLong())
+                                        },
+                                        onRateChange = { session.setNarrationRate(it) },
+                                        message = if (overviewPlaying) narration.message else null,
+                                    )
+                                    Spacer(Modifier.height(14.dp))
+                                    Transcript(
+                                        text = guideText(TourSessionManager.OVERVIEW_ID, state.overviewText),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
                             }
                         }
                     }
@@ -564,39 +588,43 @@ fun StopScreen(
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
-                            NarrationTransport(
-                                state = if (highlightApplies) narration.state else NarrationState.IDLE,
-                                positionMs = if (highlightApplies) narration.positionMs else 0L,
-                                durationMs = if (highlightApplies) narration.durationMs else 0L,
-                                rate = narration.rate,
-                                onPlayPause = {
-                                    if (isPlaying && highlightApplies) {
-                                        session.pauseNarration()
-                                    } else if (highlightApplies && narration.state == NarrationState.PAUSED) {
-                                        session.resumeNarration()
-                                    } else {
-                                        playThisStop(current.id)
-                                    }
-                                },
-                                onRewind = { session.skipNarrationBy(-15_000) },
-                                onForward = { session.skipNarrationBy(15_000) },
-                                onPrevious = { moveToPage(previousPage) },
-                                onNext = { moveToPage(page + 1) },
-                                onSeekFraction = { fraction ->
-                                    session.seekNarrationTo((fraction * narration.durationMs).toLong())
-                                },
-                                onRateChange = { session.setNarrationRate(it) },
-                                message = if (highlightApplies) narration.message else null,
-                            )
+                            if (current.id in guideLoading) {
+                                LoadingContent()
+                            } else {
+                                NarrationTransport(
+                                    state = if (highlightApplies) narration.state else NarrationState.IDLE,
+                                    positionMs = if (highlightApplies) narration.positionMs else 0L,
+                                    durationMs = if (highlightApplies) narration.durationMs else 0L,
+                                    rate = narration.rate,
+                                    onPlayPause = {
+                                        if (isPlaying && highlightApplies) {
+                                            session.pauseNarration()
+                                        } else if (highlightApplies && narration.state == NarrationState.PAUSED) {
+                                            session.resumeNarration()
+                                        } else {
+                                            playThisStop(current.id)
+                                        }
+                                    },
+                                    onRewind = { session.skipNarrationBy(-15_000) },
+                                    onForward = { session.skipNarrationBy(15_000) },
+                                    onPrevious = { moveToPage(previousPage) },
+                                    onNext = { moveToPage(page + 1) },
+                                    onSeekFraction = { fraction ->
+                                        session.seekNarrationTo((fraction * narration.durationMs).toLong())
+                                    },
+                                    onRateChange = { session.setNarrationRate(it) },
+                                    message = if (highlightApplies) narration.message else null,
+                                )
+                            }
                         }
 
-                        Column(Modifier.padding(16.dp)) {
-                            SectionTitle("Transcript")
-                            Transcript(
-                                text = current.narration,
-                                highlightStart = if (highlightApplies) narration.highlightStart else 0,
-                                highlightEnd = if (highlightApplies) narration.highlightEnd else 0,
-                            )
+                        if (current.id !in guideLoading) {
+                            Column(Modifier.padding(16.dp)) {
+                                SectionTitle("Transcript")
+                                Transcript(
+                                    text = guideText(current.id, current.narration),
+                                )
+                            }
                         }
 
                         // Visitor information: the reference material that makes this the stop page.
@@ -725,6 +753,27 @@ fun StopScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Shown where a stop's transport and transcript go while the guide's version of it is being
+ * written. Deliberately per stop: only the narration the walker is waiting on shows a loading
+ * state, never the whole tour at once.
+ */
+@Composable
+private fun LoadingContent(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "Loading content\u2026",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

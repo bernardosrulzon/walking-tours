@@ -70,15 +70,17 @@ internal object AiHttp {
         url: String,
         body: JSONObject,
         headers: Map<String, String> = emptyMap(),
+        readTimeoutMs: Int = TIMEOUT_MS,
     ): JSONObject = withContext(Dispatchers.IO) {
-        request("POST", url, body.toString(), headers)
+        request("POST", url, body.toString(), headers, readTimeoutMs)
     }
 
     suspend fun getJson(
         url: String,
         headers: Map<String, String> = emptyMap(),
+        readTimeoutMs: Int = TIMEOUT_MS,
     ): JSONObject = withContext(Dispatchers.IO) {
-        request("GET", url, null, headers)
+        request("GET", url, null, headers, readTimeoutMs)
     }
 
     private fun request(
@@ -86,13 +88,16 @@ internal object AiHttp {
         url: String,
         body: String?,
         headers: Map<String, String>,
+        readTimeoutMs: Int,
     ): JSONObject {
         var connection: HttpURLConnection? = null
         try {
             connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
                 connectTimeout = TIMEOUT_MS
-                readTimeout = TIMEOUT_MS
+                // Speech generation of a few minutes of audio, and long rewrites, take far longer
+                // than a chat turn; the caller raises this where that is expected.
+                readTimeout = readTimeoutMs
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Accept", "application/json")
                 headers.forEach { (name, value) -> setRequestProperty(name, value) }

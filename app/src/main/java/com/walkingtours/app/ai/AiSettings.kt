@@ -5,8 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Default cloud voice: a Chirp 3: HD American voice, the most natural option Google offers. */
-const val DEFAULT_CLOUD_VOICE = "en-US-Chirp3-HD-Achernar"
+/** Default cloud voice: a Gemini 3.8 prebuilt voice. */
+const val DEFAULT_CLOUD_VOICE = "Kore"
 
 /** Language used for both narration and voice discovery. */
 const val NARRATION_LANGUAGE = "en-US"
@@ -37,8 +37,11 @@ data class AiSettingsState(
     val hasTtsKey: Boolean get() = ttsApiKey.isNotBlank()
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 
+    /** True when either key could drive the Gemini cloud voice. */
+    val hasCloudVoiceKey: Boolean get() = hasTtsKey || hasGeminiKey
+
     /** True only when the user has both chosen the cloud engine and supplied a usable key. */
-    val cloudVoiceReady: Boolean get() = useCloudVoice && hasTtsKey
+    val cloudVoiceReady: Boolean get() = useCloudVoice && hasCloudVoiceKey
 }
 
 /**
@@ -63,8 +66,10 @@ class AiSettings(context: Context) {
         return AiSettingsState(
             // Default the cloud voice on when a key was supplied at build time, so a configured
             // build just works; otherwise stay on the free on-device engine.
-            useCloudVoice = prefs.getBoolean(KEY_USE_CLOUD, buildTts.isNotBlank()),
-            cloudVoiceName = prefs.getString(KEY_VOICE, DEFAULT_CLOUD_VOICE) ?: DEFAULT_CLOUD_VOICE,
+            useCloudVoice = prefs.getBoolean(KEY_USE_CLOUD, buildTts.isNotBlank() || buildGemini.isNotBlank()),
+            cloudVoiceName = (prefs.getString(KEY_VOICE, null) ?: DEFAULT_CLOUD_VOICE)
+                // Drop a Cloud TTS name saved before the switch to Gemini voices.
+                .takeIf { it in GEMINI_TTS_VOICES } ?: DEFAULT_CLOUD_VOICE,
             ttsApiKey = prefs.getString(KEY_TTS_KEY, null) ?: buildTts,
             geminiApiKey = prefs.getString(KEY_GEMINI_KEY, null) ?: buildGemini,
             geminiModel = prefs.getString(KEY_GEMINI_MODEL, "") ?: "",

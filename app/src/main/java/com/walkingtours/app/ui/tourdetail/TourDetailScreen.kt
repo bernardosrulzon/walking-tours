@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -81,6 +82,8 @@ fun TourDetailScreen(
     onStartOver: () -> Unit,
     /** Starts the walk at this stop and shows it. */
     onOpenStop: (String) -> Unit,
+    /** Opens the persona flow to choose or change the guide. */
+    onOpenPersona: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val repository = ServiceLocator.repository
@@ -91,6 +94,10 @@ fun TourDetailScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val progress by remember(tourId) { repository.observeStopProgress(tourId) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // The chosen guide, shown on the page so the walker can see who is talking and change it.
+    val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
+    val guide = persona.guide(tourId)
 
     // The overview map shows the walker too. It used to be the one map in the app without a "you
     // are here", because only a running tour ever asked for position updates.
@@ -228,6 +235,52 @@ fun TourDetailScreen(
                             else -> "Resume tour"
                         },
                     )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                // Who is telling the story, and the way to change them. Choosing happens
+                // automatically on the first Start tour; this is the door back to it.
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Explore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "Your guide",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                            Text(
+                                text = guide?.name ?: "Not chosen yet",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                            guide?.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
+                                Text(
+                                    text = tagline,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                        }
+                        TextButton(onClick = onOpenPersona) {
+                            Text(if (guide == null) "Choose" else "Change")
+                        }
+                    }
                 }
             }
 

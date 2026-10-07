@@ -3,7 +3,9 @@ package com.walkingtours.app
 import android.content.Context
 import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.ai.GeminiClient
-import com.walkingtours.app.ai.GoogleCloudTtsClient
+import com.walkingtours.app.ai.GuideController
+import com.walkingtours.app.ai.GeminiTtsClient
+import com.walkingtours.app.ai.PersonaSettings
 import com.walkingtours.app.ai.TravelChatController
 import com.walkingtours.app.audio.NarrationRouter
 import com.walkingtours.app.data.ContentSeeder
@@ -50,8 +52,15 @@ object ServiceLocator {
 
     val aiSettings: AiSettings by lazy { AiSettings(appContext) }
 
-    val cloudTtsClient: GoogleCloudTtsClient by lazy {
-        GoogleCloudTtsClient(appContext) { aiSettings.current.ttsApiKey }
+    /** The walker's persona: the explorer answer, and the chosen guide per tour. */
+    val personaSettings: PersonaSettings by lazy { PersonaSettings(appContext) }
+
+    val geminiTtsClient: GeminiTtsClient by lazy {
+        // The Gemini key first: this is a Gemini model. The Cloud TTS key is only a fallback for a
+        // build that predates the switch.
+        GeminiTtsClient(appContext) {
+            aiSettings.current.geminiApiKey.ifBlank { aiSettings.current.ttsApiKey }
+        }
     }
 
     val geminiClient: GeminiClient by lazy {
@@ -59,11 +68,19 @@ object ServiceLocator {
     }
 
     /**
+     * The guide personas and the personalised narration they produce. App-scoped so a rewrite keeps
+     * running while the walker moves between screens, and so the cache outlives any one screen.
+     */
+    val guide: GuideController by lazy {
+        GuideController(repository, geminiClient, aiSettings, personaSettings)
+    }
+
+    /**
      * One narration engine for the whole process. It forwards to whichever implementation the
      * settings select, so screens and the tour session never have to re-subscribe mid-walk.
      */
     val narrationEngine: NarrationRouter by lazy {
-        NarrationRouter(appContext, aiSettings, cloudTtsClient)
+        NarrationRouter(appContext, aiSettings, geminiTtsClient)
     }
 
     val locationTracker: LocationTracker by lazy { LocationTracker(appContext) }
@@ -72,10 +89,10 @@ object ServiceLocator {
     val headingProvider: HeadingProvider by lazy { HeadingProvider(appContext) }
 
     val session: TourSessionManager by lazy {
-        TourSessionManager(appContext, repository, locationTracker, narrationEngine, aiSettings)
+        TourSessionManager(appContext, repository, locationTracker, narrationEngine, aiSettings, guide)
     }
 
     val chat: TravelChatController by lazy {
-        TravelChatController(repository, geminiClient, aiSettings, narrationEngine)
+        TravelChatController(repository, geminiClient, aiSettings, narrationEngine, guide)
     }
 }

@@ -3,7 +3,7 @@ package com.walkingtours.app.audio
 import android.content.Context
 import android.util.Log
 import com.walkingtours.app.ai.AiSettings
-import com.walkingtours.app.ai.GoogleCloudTtsClient
+import com.walkingtours.app.ai.GeminiTtsClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 class NarrationRouter(
     private val context: Context,
     private val settings: AiSettings,
-    private val cloudClient: GoogleCloudTtsClient,
+    private val cloudClient: GeminiTtsClient,
 ) : NarrationEngine {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -39,7 +39,7 @@ class NarrationRouter(
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
     private val deviceEngine = AndroidTtsNarrationEngine(context)
-    private var cloudEngine: GoogleCloudTtsNarrationEngine? = null
+    private var cloudEngine: GeminiTtsNarrationEngine? = null
 
     private var progressJob: Job? = null
 
@@ -51,7 +51,7 @@ class NarrationRouter(
 
     private var lastRequest: Request? = null
 
-    private data class Request(val stopId: String, val text: String, val startOffset: Int)
+    private data class Request(val stopId: String, val text: String, val startOffset: Int, val style: String?)
 
     private val cloudConfigured: Boolean get() = settings.current.cloudVoiceReady
 
@@ -99,7 +99,7 @@ class NarrationRouter(
 
         cloudEngine?.release()
         cloudEngine = if (state.cloudVoiceReady) {
-            GoogleCloudTtsNarrationEngine(context, settings, cloudClient)
+            GeminiTtsNarrationEngine(context, settings, cloudClient)
         } else {
             null
         }
@@ -116,7 +116,7 @@ class NarrationRouter(
                 _progress.value = update
                 // Cloud failed for this utterance: cover for it with the on-device voice.
                 if (update.state == NarrationState.UNAVAILABLE &&
-                    engine is GoogleCloudTtsNarrationEngine &&
+                    engine is GeminiTtsNarrationEngine &&
                     !usingDeviceFallback
                 ) {
                     // Launch separately: bind() cancels the job this collector runs in.
@@ -137,14 +137,14 @@ class NarrationRouter(
             message = "Cloud voice unavailable \u2014 using the phone's voice.",
         )
         bind()
-        active.play(request.stopId, request.text, request.startOffset)
+        active.play(request.stopId, request.text, request.startOffset, request.style)
     }
 
     override fun prepare(onReady: (Boolean) -> Unit) = active.prepare(onReady)
 
-    override fun play(stopId: String, text: String, startOffset: Int) {
-        lastRequest = Request(stopId, text, startOffset)
-        active.play(stopId, text, startOffset)
+    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
+        lastRequest = Request(stopId, text, startOffset, style)
+        active.play(stopId, text, startOffset, style)
     }
 
     override fun pause() = active.pause()

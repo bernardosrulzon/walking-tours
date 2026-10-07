@@ -19,12 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 /** Compact rounded label, e.g. "14 stops" or "2.8 km". Used instead of chips to keep styling simple. */
@@ -100,33 +96,18 @@ fun InfoRow(
 }
 
 /**
- * Renders the spoken narration with the currently-audible characters highlighted.
+ * Renders the spoken narration as plain prose.
  *
- * This is what makes the text view feel connected to the audio rather than a separate transcript:
- * the highlight is driven by the text-to-speech engine's own word-boundary callbacks.
+ * It used to highlight the characters currently being spoken, but that only works when the speech
+ * engine reports word boundaries. The Gemini voice returns finished audio with no timings, so the
+ * highlight was a proportional guess that drifted from the voice; it has been removed rather than
+ * left to lie. The transcript and the transport's progress bar stay.
  */
 @Composable
 fun Transcript(
     text: String,
-    highlightStart: Int,
-    highlightEnd: Int,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyLarge,
-    highlight: Color = MaterialTheme.colorScheme.primaryContainer,
-    highlightText: Color = MaterialTheme.colorScheme.onPrimaryContainer,
 ) {
-    val annotated: AnnotatedString = remember(text, highlightStart, highlightEnd, highlight, highlightText) {
-        buildAnnotatedString {
-            val start = highlightStart.coerceIn(0, text.length)
-            val end = highlightEnd.coerceIn(start, text.length)
-            append(text.substring(0, start))
-            if (end > start) {
-                withStyle(SpanStyle(background = highlight, color = highlightText)) {
-                    append(text.substring(start, end))
-                }
-            }
-            append(text.substring(end))
-        }
-    }
-    Text(text = annotated, modifier = modifier, style = style)
+    Text(text = text, modifier = modifier, style = style)
 }

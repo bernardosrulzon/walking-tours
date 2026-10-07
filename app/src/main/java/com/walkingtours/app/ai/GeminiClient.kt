@@ -82,6 +82,13 @@ class GeminiClient(
         systemInstruction: String,
         history: List<ChatMessage>,
         prompt: String,
+        maxOutputTokens: Int = 700,
+        /**
+         * Limits the model's hidden reasoning. The narration and guide rewrites are short,
+         * structured and cost-sensitive, and thinking otherwise eats the whole output budget and
+         * truncates the JSON; passing 0 switches it off. Null leaves the model's default.
+         */
+        thinkingBudget: Int? = null,
     ): String {
         val key = requireKey()
         val contents = JSONArray().apply {
@@ -113,8 +120,13 @@ class GeminiClient(
             put(
                 "generationConfig",
                 JSONObject().apply {
-                    put("temperature", 0.7)
-                    put("maxOutputTokens", 700)
+                    // Only the token cap. Google has deprecated temperature, top_p, top_k and
+                    // thinking_budget as generation parameters, and sending them now draws a
+                    // deprecation notice; the model's own defaults are used instead.
+                    put("maxOutputTokens", maxOutputTokens)
+                    if (thinkingBudget != null) {
+                        put("thinkingConfig", JSONObject().put("thinkingBudget", thinkingBudget))
+                    }
                 },
             )
         }
@@ -123,6 +135,7 @@ class GeminiClient(
             "$BASE_URL/models/$model:generateContent?key=$key",
             body,
             AppIdentityHeaders.build(context),
+            readTimeoutMs = GENERATE_TIMEOUT_MS,
         )
 
         // A safety block produces no candidates at all; say so plainly rather than showing "no reply".
@@ -174,6 +187,12 @@ class GeminiClient(
         const val TAG = "GeminiClient"
         const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
         const val MAX_HISTORY_TURNS = 8
+
+        /**
+         * Rewrites of a full stop run to tens of seconds even with thinking off, so generation gets
+         * a longer read timeout than the default chat call.
+         */
+        const val GENERATE_TIMEOUT_MS = 120_000
 
         /**
          * Used only when model discovery itself fails, which normally means a network problem.

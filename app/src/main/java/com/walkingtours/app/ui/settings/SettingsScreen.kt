@@ -122,12 +122,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Use Google Cloud voice", style = MaterialTheme.typography.bodyLarge)
+                            Text("Use Gemini voice", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = if (state.hasTtsKey) {
-                                    "Higher quality, billed per character after a monthly free allowance."
+                                text = if (state.hasCloudVoiceKey) {
+                                    "Expressive, acted narration. Billed per request after a free allowance."
                                 } else {
-                                    "Add a Text-to-Speech API key below to enable this."
+                                    "Add a Gemini API key below to enable this."
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -135,7 +135,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                         Switch(
                             checked = state.useCloudVoice,
-                            enabled = state.hasTtsKey,
+                            enabled = state.hasCloudVoiceKey,
                             onCheckedChange = { on -> settings.update { it.copy(useCloudVoice = on) } },
                         )
                     }
@@ -158,7 +158,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 voiceStatus = null
                                 scope.launch {
                                     try {
-                                        voices = ServiceLocator.cloudTtsClient
+                                        voices = ServiceLocator.geminiTtsClient
                                             .listVoices(NARRATION_LANGUAGE)
                                             .sortedWith(compareBy({ it.family }, { it.shortName }))
                                         voiceStatus = if (voices.isEmpty()) {
@@ -173,7 +173,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     }
                                 }
                             },
-                            enabled = state.hasTtsKey && !loadingVoices,
+                            enabled = state.hasCloudVoiceKey && !loadingVoices,
                         ) {
                             if (loadingVoices) {
                                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
@@ -186,7 +186,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 narration.stop()
                                 narration.play("__voice_test__", TEST_PHRASE)
                             },
-                            enabled = state.hasTtsKey,
+                            enabled = state.hasCloudVoiceKey,
                         ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))

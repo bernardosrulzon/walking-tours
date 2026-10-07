@@ -9,8 +9,9 @@ import android.media.PlaybackParams
 import android.util.Log
 import com.walkingtours.app.ai.AiException
 import com.walkingtours.app.ai.AiSettings
-import com.walkingtours.app.ai.GoogleCloudTtsClient
+import com.walkingtours.app.ai.GeminiTtsClient
 import com.walkingtours.app.ai.NARRATION_LANGUAGE
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,27 +25,26 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * Narration using Google Cloud Text-to-Speech, with the audio cached on disk.
+ * Narration using Gemini 3.8 Flash TTS, with the audio cached on disk.
  *
  * Design decisions that matter:
  *
  *  - **Synthesise once, play many times.** Each stop's narration is fetched once and written to the
- *    app's cache keyed by voice plus text. After that the tour plays entirely offline and costs
+ *    app's cache keyed by voice, style and text. After that the tour plays entirely offline and costs
  *    nothing, which is what makes a cloud voice viable for a walking tour: the network is only
- *    needed the first time a stop is reached, and the download happens while the previous stop is
- *    still playing.
- *  - **Cloud calls never happen mid-walk if we can help it.** Synthesis is kicked off the moment the
- *    stop starts playing, so a dropped connection is very unlikely to interrupt a tour in progress.
+ *    needed the first time a stop is reached.
+ *  - **The performance rides along with the words.** The guide's rewrite carries inline vocal tags
+ *    (`<laugh>`, `<short pause>`), and the caller passes a sustained [play] style for the delivery,
+ *    which is sent as `speech_metadata`. The player only ever sees the finished WAV.
  *  - **Speed is applied at playback, not synthesis.** Changing speed with `PlaybackParams` avoids
  *    re-billing and re-downloading the same narration at a different rate.
- *  - **Highlighting stays honest.** Google returns no word timings for plain text input, so the
- *    spoken position is derived from playback time and snapped to whole words, which reads
- *    naturally even though it is an approximation.
+ *  - **Highlighting stays honest.** The model returns no word timings, so the spoken position is
+ *    derived from playback time and snapped to whole words.
  */
-class GoogleCloudTtsNarrationEngine(
+class GeminiTtsNarrationEngine(
     context: Context,
     private val settings: AiSettings,
-    private val client: GoogleCloudTtsClient,
+    private val client: GeminiTtsClient,
 ) : NarrationEngine {
 
     private val appContext = context.applicationContext
@@ -53,10 +53,10 @@ class GoogleCloudTtsNarrationEngine(
     private val _progress = MutableStateFlow(NarrationProgress())
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
-    override val isAvailable: Boolean get() = settings.current.hasTtsKey
+    override val isAvailable: Boolean get() = settings.current.hasCloudVoiceKey
 
     override val engineLabel: String
-        get() = "Google Cloud voice \u00b7 ${settings.current.cloudVoiceName.substringAfterLast('-')}"
+        get() = "Gemini voice \u00b7 ${client.normalizeVoice(settings.current.cloudVoiceName)}"
 
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private var focusRequest: AudioFocusRequest? = null
@@ -66,6 +66,7 @@ class GoogleCloudTtsNarrationEngine(
     private var workJob: Job? = null
 
     private var currentText: String = ""
+    private var currentStyle: String? = null
     private var currentStopId: String? = null
     private var currentRate: Float = 1.0f
 
@@ -76,12 +77,12 @@ class GoogleCloudTtsNarrationEngine(
         onReady(isAvailable)
     }
 
-    override fun play(stopId: String, text: String, startOffset: Int) {
+    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
         if (!isAvailable) {
             _progress.value = NarrationProgress(
                 state = NarrationState.UNAVAILABLE,
                 stopId = stopId,
-                message = "Add a Google Cloud Text-to-Speech API key in Settings to use the cloud voice.",
+                message = "Add a Gemini API key in Settings to use the cloud voice.",
             )
             return
         }
@@ -89,6 +90,7 @@ class GoogleCloudTtsNarrationEngine(
         stopInternal(resetProgress = false)
         currentStopId = stopId
         currentText = text
+        currentStyle = style
         baseOffset = startOffset.coerceIn(0, text.length)
 
         _progress.value = NarrationProgress(
@@ -105,12 +107,16 @@ class GoogleCloudTtsNarrationEngine(
                 val file = ensureAudioFile(text)
                 startPlayback(file)
             } catch (e: AiException) {
-                Log.w(TAG, "Cloud synthesis failed", e)
+                Log.w(TAG, "Gemini TTS failed", e)
                 _progress.value = NarrationProgress(
                     state = NarrationState.UNAVAILABLE,
                     stopId = stopId,
                     message = e.message,
                 )
+            } catch (e: CancellationException) {
+                // A newer play() — or the walker moving on — cancelled this synthesis. That is not a
+                // failure, so let it cancel quietly instead of tripping the device-voice fallback.
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected synthesis failure", e)
                 _progress.value = NarrationProgress(
@@ -126,15 +132,15 @@ class GoogleCloudTtsNarrationEngine(
 
     /** Returns the cached audio file, synthesising it first if this is the first time we need it. */
     private suspend fun ensureAudioFile(text: String): File {
-        val voice = settings.current.cloudVoiceName
-        val dir = File(appContext.cacheDir, "cloud-tts").apply { mkdirs() }
-        val name = sha1("$voice|$NARRATION_LANGUAGE|$text") + ".mp3"
+        val voice = client.normalizeVoice(settings.current.cloudVoiceName)
+        val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
+        val name = sha1("$voice|$NARRATION_LANGUAGE|${currentStyle.orEmpty()}|$text") + ".wav"
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
-        val bytes = client.synthesize(text, voice, NARRATION_LANGUAGE)
+        val bytes = client.synthesize(text, voice, currentStyle, NARRATION_LANGUAGE)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
-        // MP3 in the cache that would fail to play forever after.
+        // file in the cache that would fail to play forever after.
         val temp = File(dir, "$name.part")
         temp.writeBytes(bytes)
         if (!temp.renameTo(file)) {
@@ -159,8 +165,6 @@ class GoogleCloudTtsNarrationEngine(
             mediaPlayer.setDataSource(file.absolutePath)
             mediaPlayer.prepare()
 
-            // Resuming part-way through: convert the character offset into a position. MP3 carries
-            // no word timings, so this is proportional — good enough to feel right.
             if (baseOffset > 0 && mediaPlayer.duration > 0) {
                 val fraction = baseOffset.toFloat() / currentText.length.coerceAtLeast(1)
                 mediaPlayer.seekTo((mediaPlayer.duration * fraction).toInt())
@@ -216,15 +220,7 @@ class GoogleCloudTtsNarrationEngine(
                 val duration = runCatching { mediaPlayer.duration }.getOrDefault(0)
                 val position = runCatching { mediaPlayer.currentPosition }.getOrDefault(0)
                 if (duration > 0) {
-                    val fraction = (position.toDouble() / duration).coerceIn(0.0, 1.0)
-                    // The file holds the whole narration and we seek within it, so the player's
-                    // position is already absolute — mapping it straight onto the text length is
-                    // correct. (Adding baseOffset here would double-count the resume point.)
-                    val offset = (fraction * currentText.length).toInt()
-                    val range = wordRangeAt(currentText, offset)
                     _progress.value = _progress.value.copy(
-                        highlightStart = range.first,
-                        highlightEnd = range.last + 1,
                         positionMs = position.toLong(),
                         durationMs = duration.toLong(),
                         rate = currentRate,
@@ -238,17 +234,6 @@ class GoogleCloudTtsNarrationEngine(
     private fun stopTicking() {
         tickJob?.cancel()
         tickJob = null
-    }
-
-    /** Expands a rough character offset to the whole word containing it, so highlighting looks clean. */
-    private fun wordRangeAt(text: String, offset: Int): IntRange {
-        if (text.isEmpty()) return 0..0
-        val clamped = offset.coerceIn(0, text.length)
-        var start = clamped
-        while (start > 0 && !text[start - 1].isWhitespace()) start--
-        var end = clamped
-        while (end < text.length && !text[end].isWhitespace()) end++
-        return start until maxOf(end, start + 1)
     }
 
     override fun pause() {
@@ -266,10 +251,8 @@ class GoogleCloudTtsNarrationEngine(
         stopTicking()
     }
 
-    /** The cloud player can seek a cached MP3 outright, so this is exact. */
     override fun seekTo(positionMs: Long) {
         val mediaPlayer = player ?: run {
-            // Audio not loaded yet: remember the intent by re-playing from the equivalent offset.
             val stopId = currentStopId
             if (stopId != null && currentText.isNotBlank()) {
                 val duration = _progress.value.durationMs
@@ -278,7 +261,7 @@ class GoogleCloudTtsNarrationEngine(
                 } else {
                     0
                 }
-                play(stopId, currentText, offset.coerceIn(0, currentText.length))
+                play(stopId, currentText, offset.coerceIn(0, currentText.length), currentStyle)
             }
             return
         }
@@ -286,20 +269,12 @@ class GoogleCloudTtsNarrationEngine(
         val target = if (duration > 0L) positionMs.coerceIn(0L, duration) else positionMs.coerceAtLeast(0L)
         runCatching { mediaPlayer.seekTo(target.toInt()) }
         _progress.value = _progress.value.copy(positionMs = target)
-        val offset = if (duration > 0L) {
-            ((target.toFloat() / duration) * currentText.length).toInt()
-        } else {
-            0
-        }
-        val range = wordRangeAt(currentText, offset)
-        _progress.value = _progress.value.copy(highlightStart = range.first, highlightEnd = range.last + 1)
     }
 
     override fun resume() {
         val mediaPlayer = player ?: run {
-            // Nothing loaded (e.g. after the process moved on) — restart from the top.
             val stopId = currentStopId
-            if (stopId != null && currentText.isNotBlank()) play(stopId, currentText, 0)
+            if (stopId != null && currentText.isNotBlank()) play(stopId, currentText, 0, currentStyle)
             return
         }
         if (_progress.value.state != NarrationState.PAUSED) return
@@ -324,6 +299,7 @@ class GoogleCloudTtsNarrationEngine(
         if (resetProgress) {
             baseOffset = 0
             currentText = ""
+            currentStyle = null
             currentStopId = null
             _progress.value = NarrationProgress(state = NarrationState.IDLE, rate = currentRate)
         }
@@ -335,10 +311,6 @@ class GoogleCloudTtsNarrationEngine(
         _progress.value = _progress.value.copy(rate = currentRate)
     }
 
-    /**
-     * Applies playback speed. Only safe while playing: on Android, calling setPlaybackParams on a
-     * paused MediaPlayer silently starts it.
-     */
     private fun applyRate() {
         val mediaPlayer = player ?: return
         val playing = runCatching { mediaPlayer.isPlaying }.getOrDefault(false)
@@ -366,9 +338,6 @@ class GoogleCloudTtsNarrationEngine(
 
     // ------------------------------------------------------------------ audio focus
 
-    /**
-     * Narration should yield to a phone call or another media app rather than talking over it.
-     */
     private fun requestFocus() {
         val manager = audioManager ?: return
         if (focusRequest == null) {
@@ -405,7 +374,7 @@ class GoogleCloudTtsNarrationEngine(
             .joinToString("") { "%02x".format(it) }
 
     private companion object {
-        const val TAG = "CloudTts"
+        const val TAG = "GeminiTts"
         const val TICK_MS = 90L
     }
 }

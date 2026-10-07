@@ -2,6 +2,8 @@ package com.walkingtours.app.tour
 
 import android.content.Context
 import android.util.Log
+import com.walkingtours.app.ai.GuideController
+import com.walkingtours.app.ai.NarrationRequest
 import com.walkingtours.app.audio.NarrationEngine
 import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.ai.AiSettings
@@ -34,6 +36,7 @@ class TourSessionManager(
     private val locationTracker: LocationTracker,
     val narration: NarrationEngine,
     private val aiSettings: AiSettings,
+    private val guide: GuideController,
 ) {
 
     /** Whether chapters start on their own (arrival/start) or only when the user presses play. */
@@ -61,6 +64,12 @@ class TourSessionManager(
     private var tourStartedAtMs: Long = 0L
 
     private var overviewJob: Job? = null
+
+    /**
+     * Loading and starting the narration for the page on screen. Held so a new page cancels the
+     * previous load — swiping on before a stop's text is ready skips it rather than playing it late.
+     */
+    private var narrationJob: Job? = null
 
     /**
      * Bumped by every start and every teardown, so an in-flight start that is superseded — the user
@@ -167,7 +176,7 @@ class TourSessionManager(
 
             when {
                 playIntro && autoPlay -> {
-                    narration.play(OVERVIEW_ID, overview)
+                    playOverviewNarration(tourId, overview)
                     watchForOverviewEnd()
                 }
                 // In manual mode the introduction is still the landing page the walker reads, but
@@ -243,8 +252,42 @@ class TourSessionManager(
         if (current.overviewText.isBlank()) return
         detector.reset()
         _state.value = current.copy(showingOverview = true, currentStopId = null)
-        narration.play(OVERVIEW_ID, current.overviewText)
+        current.tourId?.let { playOverviewNarration(it, current.overviewText) }
         watchForOverviewEnd()
+    }
+
+    /**
+     * Load the guide's version of the introduction — if there is one — then speak it. While the
+     * model is working, the page shows its loading state; nothing plays until the text is ready.
+     */
+    private fun playOverviewNarration(tourId: String, overview: String) {
+        narrationJob?.cancel()
+        narrationJob = scope.launch {
+            val line = guide.narration(
+                tourId,
+                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview),
+            )
+            narration.play(OVERVIEW_ID, line.text, style = line.style)
+        }
+    }
+
+    /**
+     * Load the guide's version of the introduction for the page to read, without playing it.
+     *
+     * The introduction is not a stop, so nothing plays automatically when its page settles. Without
+     * this, swiping back to the introduction showed the authored text until the walker pressed play.
+     */
+    fun prepareOverviewNarration() {
+        val current = _state.value
+        val tourId = current.tourId ?: return
+        val overview = current.overviewText
+        if (overview.isBlank()) return
+        scope.launch {
+            guide.narration(
+                tourId,
+                NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview),
+            )
+        }
     }
 
     fun endTour() = teardown()
@@ -271,6 +314,8 @@ class TourSessionManager(
         locationJob = null
         overviewJob?.cancel()
         overviewJob = null
+        narrationJob?.cancel()
+        narrationJob = null
         locationTracker.release()
         narration.stop()
         detector.reset()
@@ -343,11 +388,13 @@ class TourSessionManager(
             stop.id !in fired && stop.id !in visited && isNextInOrder(stops, stop)
         }
 
-        // Narration that is already playing is never cut off by a geofence. A stop the walker is
-        // standing in while the previous one talks simply waits: it stays inside on every fix, so it
-        // fires on the first fix after the audio ends, without them having to leave and come back.
+        // Narration that is already playing — or still being written for a stop just reached — is
+        // never cut off by a geofence. A stop the walker is standing in while the previous one talks
+        // simply waits: it stays inside on every fix, so it fires on the first fix after the audio
+        // ends, without them having to leave and come back.
         val audioBusy = narration.progress.value.state == NarrationState.PLAYING ||
-            narration.progress.value.state == NarrationState.PREPARING
+            narration.progress.value.state == NarrationState.PREPARING ||
+            narrationJob?.isActive == true
 
         if (candidate != null && !audioBusy) {
             Log.i(TAG, "Arrived at ${candidate.name}")
@@ -480,10 +527,21 @@ class TourSessionManager(
             currentStopId = stopId,
             showingOverview = false,
         )
-        narration.play(stop.id, stop.narration)
         // Keep Resume pointing at the stop the walker is actually on. Done here rather than only on
         // arrival, because stepping through the tour by hand is just as much "where I am".
         scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stop.id) }
+
+        // Load the guide's version of this stop — a cached one is instant — then speak it. The page
+        // shows its loading state in the meantime, so the words on screen and the voice always match.
+        val tourId = current.tourId ?: return
+        narrationJob?.cancel()
+        narrationJob = scope.launch {
+            val line = guide.narration(
+                tourId,
+                NarrationRequest(stop.id, "Stop ${stop.order}: ${stop.name} (${stop.category})", stop.narration),
+            )
+            narration.play(stop.id, line.text, style = line.style)
+        }
     }
 
     /**
@@ -497,6 +555,16 @@ class TourSessionManager(
         fired += stopId
         _state.value = current.copy(currentStopId = stopId, showingOverview = false)
         scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stopId) }
+
+        // Load the guide's version for the page to read, without starting it: in manual mode nothing
+        // plays until the walker presses play.
+        val tourId = current.tourId ?: return
+        scope.launch {
+            guide.narration(
+                tourId,
+                NarrationRequest(stop.id, "Stop ${stop.order}: ${stop.name} (${stop.category})", stop.narration),
+            )
+        }
     }
 
     fun pauseNarration() = narration.pause()

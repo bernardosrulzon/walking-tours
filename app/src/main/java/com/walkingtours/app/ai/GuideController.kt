@@ -48,9 +48,14 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "4"
+const val NARRATION_PROMPT_VERSION = "5"
 
-fun guideSignature(guide: Guide?, explorers: List<ExplorerType>, tone: String?): String? =
+fun guideSignature(
+    guide: Guide?,
+    explorers: List<ExplorerType>,
+    tone: String?,
+    language: String = NARRATION_LANGUAGE,
+): String? =
     guide?.let {
         listOf(
             NARRATION_PROMPT_VERSION,
@@ -58,6 +63,7 @@ fun guideSignature(guide: Guide?, explorers: List<ExplorerType>, tone: String?):
             it.style,
             explorers.joinToString(",") { explorer -> explorer.id },
             tone.orEmpty(),
+            language,
         ).joinToString("|")
     }
 
@@ -104,7 +110,12 @@ class GuideController(
     /** The signature the current guide, preferences and tone produce for [tourId], or null. */
     fun signatureFor(tourId: String): String? {
         val persona = personaSettings.current
-        return guideSignature(persona.guide(tourId), persona.explorers, persona.tone(tourId))
+        return guideSignature(
+            persona.guide(tourId),
+            persona.explorers,
+            persona.tone(tourId),
+            settings.current.narrationLanguage,
+        )
     }
 
     private fun cacheKey(tourId: String, key: String) = "$tourId|$key"
@@ -160,8 +171,12 @@ class GuideController(
             ?: return SpokenLine(request.authored, null).also {
                 Log.i(TAG, "No guide for $tourId; authored text for ${request.key}")
             }
-        val signature = guideSignature(guide, persona.explorers, persona.tone(tourId))
-            ?: return SpokenLine(request.authored, null)
+        val signature = guideSignature(
+            guide,
+            persona.explorers,
+            persona.tone(tourId),
+            settings.current.narrationLanguage,
+        ) ?: return SpokenLine(request.authored, null)
         val key = cacheKey(tourId, request.key)
         _narrations.value[key]
             ?.takeIf { it.signature == signature }
@@ -256,7 +271,14 @@ class GuideController(
         val tour = repository.getTour(tourId)
         val raw = geminiClient.generate(
             model = resolvedModel(),
-            systemInstruction = narrationSystem(tour, guide, persona.explorers, persona.tone(tourId), request.isIntroduction),
+            systemInstruction = narrationSystem(
+                tour,
+                guide,
+                persona.explorers,
+                persona.tone(tourId),
+                request.isIntroduction,
+                settings.current.narrationLanguage,
+            ),
             history = emptyList(),
             prompt = buildString {
                 appendLine(request.context + ".")
@@ -277,10 +299,27 @@ class GuideController(
         explorers: List<ExplorerType>,
         tone: String?,
         isIntroduction: Boolean,
+        language: String,
     ): String = buildString {
+        val portuguese = language == NARRATION_LANGUAGE_PT_BR
         appendLine("You are ${guide.name}. ${guide.tagline}")
         appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
         appendLine("Speak in this style: ${guide.style}")
+        if (portuguese) {
+            appendLine()
+            appendLine("Write the entire narration in Brazilian Portuguese (português do Brasil): every")
+            appendLine("word the walker hears and reads is Portuguese. Keep proper names of people,")
+            appendLine("places and monuments in their original form. The inline vocal tags stay exactly")
+            appendLine("as they are (<laugh>, <sigh>, <breath>, <cough>, <short pause>), and the \"style\"")
+            appendLine("direction you return stays in English.")
+            appendLine()
+            appendLine("Important: do NOT translate the English script sentence by sentence. That produces")
+            appendLine("stiff, foreign-sounding Portuguese. Read the script for the facts only, then tell")
+            appendLine("the story fresh, the way a gifted Brazilian storyteller would speak it aloud:")
+            appendLine("Brazilian rhythm and word order, natural colloquialisms where this guide's voice")
+            appendLine("calls for them, idioms that land in Portuguese rather than calques of English")
+            appendLine("ones. Restructure, merge and split sentences freely until nothing sounds translated.")
+        }
         if (!tone.isNullOrBlank()) {
             appendLine()
             appendLine("But the walker has redirected you: \"$tone\". Where that conflicts with the persona")

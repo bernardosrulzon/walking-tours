@@ -10,7 +10,6 @@ import android.util.Log
 import com.walkingtours.app.ai.AiException
 import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.ai.GeminiTtsClient
-import com.walkingtours.app.ai.NARRATION_LANGUAGE
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -133,12 +132,13 @@ class GeminiTtsNarrationEngine(
     /** Returns the cached audio file, synthesising it first if this is the first time we need it. */
     private suspend fun ensureAudioFile(text: String): File {
         val voice = client.normalizeVoice(settings.current.cloudVoiceName)
+        val language = settings.current.narrationLanguage
         val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
-        val name = sha1("$voice|$NARRATION_LANGUAGE|${currentStyle.orEmpty()}|$text") + ".wav"
+        val name = sha1("$voice|$language|${currentStyle.orEmpty()}|$text") + ".wav"
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
-        val bytes = client.synthesize(text, voice, currentStyle, NARRATION_LANGUAGE)
+        val bytes = client.synthesize(text, voice, currentStyle, language)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
         // file in the cache that would fail to play forever after.
         val temp = File(dir, "$name.part")

@@ -5,7 +5,7 @@
     "city": "Istanbul",
     "country": "Türkiye",
     "summary": "Four centuries of sultans, concubines, viziers and one very large diamond — inside a palace the size of a small town.",
-    "overviewText": "Welcome to Topkapı. Or, more precisely, hoş geldiniz to the house that ran an empire.\n\nFor almost four hundred years, this sprawl of courtyards, kitchens, treasuries and bath-warmed halls was the centre of the Ottoman world. Every law passed, every war declared, every ambassador snubbed — it happened inside these walls. And this particular door is, historically speaking, extremely fancy.\n\nHere is the shape of the visit, so nothing surprises you. Topkapı is built as four courtyards, each one more private than the last, like an apartment building for people who could have anyone killed. The first court is free to wander. The second is where the kitchens are, and where the sultan actually listened to his ministers — from a window, spying, naturally. The third is where he lived with his mother, his wives and his concubines: the Harem. The fourth looks out over the Bosphorus like it invented the view.\n\nTwo pieces of practical kindness. First: the ticket includes the Harem now, so do not let anyone sell you a second one. Second: you will walk roughly a kilometre and climb charming Ottoman slopes that were never designed for modern knees. Wear shoes that have already forgiven you.\n\nOne last thing before we start: everything in here has a story, and most of them are gossip dressed up as history. Some of it is definitely true. Some of it is what the Ottomans told the tourists of 1650. Either way, it's a better tour than the official brochure.\n\nWalk slowly. The palace rewards gawking.",
+    "overviewText": "Welcome to Topkapı. Or, more precisely, hoş geldiniz to the house that ran an empire.\n\nFor almost four hundred years, this sprawl of courtyards, kitchens, treasuries and bath-warmed halls was the centre of the Ottoman world. Every law passed, every war declared, every ambassador snubbed — it happened inside these walls. And this particular door is, historically speaking, extremely fancy.\n\nHere is the shape of the visit, so nothing surprises you. Topkapı is built as four courtyards, each one more private than the last, like an apartment building for people who could have anyone killed. The first court is free to wander. The second is where the kitchens are, and where the sultan actually listened to his ministers — from a window, spying, naturally. The third is where he lived with his mother, his wives and his concubines: the Harem. The fourth looks out over the Bosphorus like it invented the view.\n\nTwo pieces of practical kindness. First: one combined ticket covers every stop on this tour, so do not let anyone sell you extras. Second: you will walk roughly a kilometre and climb charming Ottoman slopes that were never designed for modern knees. Wear shoes that have already forgiven you.\n\nOne last thing before we start: everything in here has a story, and most of them are gossip dressed up as history. Some of it is definitely true. Some of it is what the Ottomans told the tourists of 1650. Either way, it's a better tour than the official brochure.\n\nWalk slowly. The palace rewards gawking.",
     "distanceKm": 1.2,
     "totalWalkMinutes": 90,
     "difficulty": "Mostly flat inside the courtyards, but long. Expect gravel paths, a few slopes between courtyards, and one notoriously sloped tile-paved lane to the Harem.",
@@ -30,10 +30,10 @@
       "accessibility": "Level stone paving through the gate. The First Court has a few gentle slopes.",
       "insiderTip": "Look at the two towers' roofs — one is conical, one has a little kiosk. Ottoman architecture loves that asymmetry, and once you see it everywhere else in the city stops looking symmetrical.",
       "nextStopDirections": "Walk through the gate into the First Court and keep straight, following the wall on your left towards the church with the squat dome.",
-      "photoAsset": "photos/topkapi-palace.jpg",
-      "photoAttribution": "Photograph: Carlos Delgado, CC BY-SA 3.0, via Wikimedia Commons",
+      "photoAsset": "photos/imperial-gate.jpg",
+      "photoAttribution": "Photograph: Gryffindor, Public domain, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
-      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Topkap%C4%B1_-_01.jpg"
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Imperial_Gate_Topkapi_Istanbul_2007_002.jpg"
     },
     {
       "order": 2,
@@ -44,14 +44,17 @@
       "lng": 28.98106,
       "narration": "That dome sitting inside the palace walls? That is Hagia Irene, and it is still older than almost everything else you will see today, including the palace.\n\nIt was built in the fourth century, before it had a famous neighbour three hundred metres away called Hagia Sophia. The Ottoman sultans never converted it into a mosque — it became an arsenal, then a military warehouse, then a museum. So while its giant cousin across the square went church, mosque, museum, mosque again, Hagia Irene has quietly sat here through every version of that argument.\n\nStand in front and listen. On performance nights the interior has acoustics so good that the orchestra looks slightly confused — strings bloom, singers fill the dome without a microphone. On ordinary days it is gloriously, almost embarrassingly, silent. Worth stepping inside for the absence of echo.",
       "suggestedMinutes": 10,
-      "entranceFeeTry": "Separate small ticket, or covered by the museum pass",
-      "entranceFeeNote": "Prices move; check the board near the door. The courtyard in front is free to look at.",
+      "entranceFeeTry": "Included in the main ticket",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same hours as the main palace. Closed on Tuesdays, like its host.",
       "accessibility": "Steps at the entrance. The interior is flat stone.",
       "insiderTip": "Come back at dusk. The attendants switch on the interior lights and the place looks like the inside of a jewelry box designed by architects.",
       "nextStopDirections": "Head back towards the Imperial Gate and bear right, following signs for the Second Court and the ticket checkpoints. The palace kitchens sit along the wall there.",
-      "triggerRadiusMeters": 40
+      "triggerRadiusMeters": 40,
+      "photoAsset": "photos/hagia-irene.jpg",
+      "photoAttribution": "Photograph: Julia Sumangil, CC BY-SA 4.0, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Hagia_Irene_-1.jpg"
     },
     {
       "order": 3,
@@ -63,13 +66,16 @@
       "narration": "These long domed pavilions fed an empire, and then some. At its peak, the palace kitchen employed around a thousand cooks and served tens of thousands of people a day — not just the sultan's household, but also the staff of the mosques and the poor who worked on the palace grounds. A sultan's palace ran on soup, and a lot of it.\n\nThe little chimneys you see pricking up from the roofs are forced-draft vents, designed to suck smoke out of the domes. Which tells you two things: the cooks worked fiercely, and nobody in the harem ever complained about the smell of grilling lamb wafting past their windows. Everything is engineered.\n\nNow look at what is inside. There, ranged in glass cases, is one of the great Chinese porcelain collections of the world. Here is the gossip: nobody can fully explain why the sultans collected so obsessively. The standard story is that blue-and-white Chinese ceramics were believed to change colour in the presence of poison — a fantastic property, if true. What is true is that the sultans loved the stuff, and had several thousand pieces made specially for them in blue and white.",
       "suggestedMinutes": 12,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "Just the general admission. The kitchens line the second courtyard's wall.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace. The courtyard is open access to anyone already through the ticket gate.",
       "accessibility": "Gentle slope up to the kitchen doors; most of the exhibition is level.",
       "insiderTip": "The most famous set is the celadon bowls — the green ones. Their glaze was believed to crack if poison was present. Proof never materialised, but the legend did the marketing.",
       "nextStopDirections": "Turn left at the far end of the kitchens and walk across the Second Court towards the ornate gate with the two stone towers.",
-      "triggerRadiusMeters": 40
+      "triggerRadiusMeters": 40,
+      "photoAsset": "photos/palace-kitchens.jpg",
+      "photoAttribution": "Photograph: Gryffindor, Public domain, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Palace_kitchens_Topkapi_2007_017.jpg"
     },
     {
       "order": 4,
@@ -81,13 +87,16 @@
       "narration": "That tall white tower, the one leaning over the Second Court like it is supervising, is called the Tower of Justice. It is a lighthouse, metaphorically speaking. The theory goes like this: every few days, the sultan climbed up here and watched the comings and goings of his officials. If a grand vizier was living suspiciously well, that was that. Your career, and possibly your head, stopped on the signal.\n\nWhich makes it the Ottoman ancestor of an org chart. The sultan was not always in the room where the decisions happened, and the Tower was how he made sure the room behaved anyway.\n\nAlso: the Divan, the council that actually ran the day-to-day empire, met in chambers along the wall behind you. Some historians will tell you the meetings were open; the sultan would then literally listen through the ornate grilled window in the Divan room. He wanted to hear what his ministers said when they thought he was not there. He was not subtle. Or maybe he was, and this was how he stayed clever. Both stories are plausible.",
       "suggestedMinutes": 8,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "The Tower of Justice can be viewed from the courtyard; climbing inside is not part of the standard visit.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace.",
       "accessibility": "The courtyard slopes gently. The Divan chambers have a couple of steps.",
       "insiderTip": "The grilled window is still there in the Divan's upper wall. Next time you visit a government office anywhere in the world, remember that one small window had more real power than the room itself.",
       "nextStopDirections": "Walk past the Tower of Justice towards the ornate gate to the left — the Gate of Salutation. It is the only way into the Third Court and the Harem.",
-      "triggerRadiusMeters": 35
+      "triggerRadiusMeters": 35,
+      "photoAsset": "photos/tower-of-justice.jpg",
+      "photoAttribution": "Photograph: Gryffindor, Public domain, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Tower_of_Justice_Topkapi_2007.jpg"
     },
     {
       "order": 5,
@@ -99,13 +108,16 @@
       "narration": "Bab-üs Saadet — the Gate of Salutation. Passing through this door changed your legal status. From this point on, you were inside the sultan's private world, and the palace rules applied to you. Wrong word to the wrong official through there, and you might never leave through it again.\n\nIt is also the point where the pageantry began. Once a week, the sultan crossed this gate on his way to Friday prayers at one of the city's big mosques, flanked by soldiers in enormous hats. The hats were as tall as masts; the fashion statement was deliberate. The crowd would line the street to see the sleeves of his kaftan swing by. Istanbul took its weekend particularly seriously.\n\nInside the Third Court, which we are about to enter, you will find the Audience Chamber, the treasury and the Harem. It is the most private courtyard of the four — the sultan's home, as opposed to his office.",
       "suggestedMinutes": 5,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "The ticket checkpoint is just in front of the Second Court's ticket booth.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace. Tuesday closed.",
       "accessibility": "Level stone paving through the gate.",
       "insiderTip": "Look up at the inscription above the gate. Every sultan who added a decoration or rebuilt a pavilion left his mark — historians read the building like a signature book.",
       "nextStopDirections": "Walk through the Gate of Salutation into the Third Court and head right, up the little slope to the pavilion with the red-tiled roof and the two dark columns.",
-      "triggerRadiusMeters": 30
+      "triggerRadiusMeters": 30,
+      "photoAsset": "photos/gate-of-salutation.jpg",
+      "photoAttribution": "Photograph: Shoakat hossain, CC BY-SA 4.0, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Gate_of_Salutation_(Topkapi_Palace).jpg"
     },
     {
       "order": 6,
@@ -117,13 +129,16 @@
       "narration": "Do you see those two columns framing the pavilion? That is the Arz Odası — the Audience Chamber — where the sultan received foreign ambassadors and held court. If you wanted to complain about taxes or declare war, this is where the conversation started.\n\nAmbassadors' memoirs are full of the same experience: you walk in, and suddenly your status as a world leader has dropped to that of the guy waiting outside the dentist. The room was full of soldiers, scribes and officials, and you got one audience and one chance. The sultan sat up on a low dais, and if you were a visiting king, a Persian shah or the Holy Roman Emperor, you still had to step carefully.\n\nA small human moment from one of those audiences: the Venetian ambassador who visited Mehmed the Second was offered coffee. The Italians had never seen coffee before. He wrote home in a state of confusion, and at the same time a great deal of fashion history was created. The empire had a gift for making other civilisations imitate it without meaning to.",
       "suggestedMinutes": 10,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "The chamber sits on the Third Court, a short slope up from the gate.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace.",
       "accessibility": "A short slope and a few steps at the entrance.",
       "insiderTip": "The marble fountain on the courtyard side is a later addition; the pavilion's red-tiled roof is what you want to photograph. Try late afternoon, when the light slants through the columns.",
       "nextStopDirections": "From the Audience Chamber, walk down the courtyard to the arched doorway on the left — that is the entrance to the Harem. Get ready. It is the quietest and most crowded part of the visit.",
-      "triggerRadiusMeters": 35
+      "triggerRadiusMeters": 35,
+      "photoAsset": "photos/audience-chamber.jpg",
+      "photoAttribution": "Photograph: Osama Shukir Muhammed Amin FRCP(Glasg), CC BY-SA 4.0, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:The_exterior_of_the_Audience_Chamber_(the_Chamber_of_Petitions;_Arz_Odası)._Topkapi_Palace,_Istanbul,_Turkey.jpg"
     },
     {
       "order": 7,
@@ -135,13 +150,16 @@
       "narration": "Welcome to the most misunderstood wing of the palace. The Harem — or harem, strictly speaking it is a place, not a crowd — was the private household of the dynasty. It housed the sultan's mother, his wives, his concubines, his sons and grandsons, his unmarried sisters, and a large staff of attendants. The name comes from the Arabic word for the part of the home women were in charge of. The sultan's presence here created the empire's most powerful institution.\n\nThe first person you meet here, in the courtyard, is the sultan's mother, the Valide Sultan. She ran the household, had a staff bigger than some European courts, and because she is still alive in statues and miniatures and documents, she is today the most powerful Ottoman you have never heard of. Her private rooms, which you can visit, are rich with Iznik tiles and detail.\n\nThe lanes through the Harem will fill up quickly. Step in and let the crowd thin out; this place rewards patience. The most famous rooms: the Imperial Hall with its enormous dome, the bedchamber of Murad the Third, and the Circumcision Room covered in fifteenth-century Iznik tiles that still look wet. When you are done, step back out into the courtyard and take a breath. You have just walked through four hundred years of domestic politics.",
       "suggestedMinutes": 25,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "Since 2021 the Harem is covered by the main ticket; do not buy a second one.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace. Note: Harem lanes can close early if crowded — aim for before 11am.",
       "accessibility": "The Harem is the least accessible part of the palace: steep tile lanes, narrow doorways, and very few ramps. Plan accordingly.",
       "insiderTip": "The Circumcision Room's tiles are Iznik at their peak — the blues and the turquoises. Stand in the middle and look up. The colours still read like they were glazed yesterday.",
       "nextStopDirections": "Exit the Harem at the far door, go back through the Third Court, and walk down the gentle slope towards the domed treasury building on the far side.",
-      "triggerRadiusMeters": 40
+      "triggerRadiusMeters": 40,
+      "photoAsset": "photos/harem.jpg",
+      "photoAttribution": "Photograph: Emirrnk1, CC BY-SA 4.0, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Topkapi_Palace_Harem_Interior_Rococo_Room.jpg"
     },
     {
       "order": 8,
@@ -153,13 +171,16 @@
       "narration": "That square stone building with the row of domes is the Imperial Treasury — one of the few parts of the palace where the decorations are treasure instead of tile. Inside: four hundred years of gifts, loot and state jewellery, organised with the help of 1980s Ottoman interior design.\n\nThe highlights, in order of volume: the Spoonmaker's Diamond, a big oily diamond roughly the size of a pigeon's egg, with eighty smaller diamonds around it. Then the 86-carat Kasikci Diamond — same pigeon-egg analogy applies. Then the throne of Ahmed the First, upholstered in olive-green and studded with jewels, because necessary. Then the jewelled daggers, because Ahmed's nephew Ahmed the Third apparently thought a knife for cutting fruit needed to look like a small meteor strike.\n\nWalk through slowly. The whole place has the atmosphere of a cathedral redecorated by a king who had finally bought enough presents for everyone.",
       "suggestedMinutes": 15,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "Part of the general admission; photography inside is usually not allowed.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace. Closes earlier than the courtyards; check the board.",
       "accessibility": "Level through the rooms. The entry from the courtyard has a step or two.",
       "insiderTip": "The Kasikci Diamond has a folk story: it was found in a garbage heap by a man called Kasikci (the Spoonmaker), who traded it to a jeweller for three spoons. The truth is it was in the treasury long before that story grew. Either way, it is now one of the world's great gems. Tell everyone at dinner.",
       "nextStopDirections": "Leave the treasury and walk up the gentle slope to the Fourth Court pavilion at the far end. The Bosphorus panorama starts there.",
-      "triggerRadiusMeters": 35
+      "triggerRadiusMeters": 35,
+      "photoAsset": "photos/imperial-treasury.jpg",
+      "photoAttribution": "Photograph: Gryffindor, Public domain, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Imperial_Treasury_Topkapi_58.JPG"
     },
     {
       "order": 9,
@@ -171,13 +192,16 @@
       "narration": "We end where the palace ends: the Bosphorus. That strip of water below you is the narrow seam between Europe and Asia, about seven hundred metres wide and about four hundred years deep into Ottoman history. Sultans picked this spot for the palace because of that view, and because you can see trouble — or treasure — coming from a long way off.\n\nLook across to the Asian side. That is Üsküdar. The mosque with the slender minarets opposite is the Süleymaniye's little brother — no, wait, that is across the Golden Horn; let's not get into landmarks I cannot see from here. The point is: the continent you are looking at is Asia. The land under your feet is Europe. The palace sitting between them was the Ottoman way of reminding everyone that they owned both.\n\nStay for a minute. Watch the ferries stitch the two shores together. Then go and have a tea. You have just walked through the most private four centuries of a city that refuses to be forgotten.",
       "suggestedMinutes": 10,
       "entranceFeeTry": "Included in the main ticket",
-      "entranceFeeNote": "The Fourth Court terrace is part of the palace ticket.",
+      "entranceFeeNote": "One combined ticket covers every stop in this tour: courtyards, kitchens, treasury, Harem and Hagia Irene.",
       "isFree": false,
       "openingHours": "Same as the main palace. The view is best in slanting evening light.",
       "accessibility": "A short slope and a couple of steps down to the terrace.",
       "insiderTip": "The pier below the palace is one of the boarding points for ferries to the Asian side. After the tour, buying two tickets down there is the local's alternative to the tour of the city you just walked.",
       "nextStopDirections": "End of the walk. If you want the long version, the ferries below the palace run to Kadıköy and Üsküdar on the Asian side.",
-      "triggerRadiusMeters": 40
+      "triggerRadiusMeters": 40,
+      "photoAsset": "photos/bosphorus-terrace.jpg",
+      "photoAttribution": "Photograph: Gryffindor, Public domain, via Wikimedia Commons",
+      "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Bosphorus_view_Topkapi_Istanbul_2007.jpg"
     }
   ]
 }

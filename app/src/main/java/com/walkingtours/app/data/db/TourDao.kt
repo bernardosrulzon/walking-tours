@@ -75,4 +75,11 @@ interface TourDao {
 
     @Query("DELETE FROM tour_progress WHERE tourId = :tourId")
     suspend fun clearTourProgress(tourId: String)
+
+    /** Wipes the bundled content so it can be re-seeded after a content update. */
+    @Query("DELETE FROM stops")
+    suspend fun clearAllStops()
+
+    @Query("DELETE FROM tours")
+    suspend fun clearAllTours()
 }

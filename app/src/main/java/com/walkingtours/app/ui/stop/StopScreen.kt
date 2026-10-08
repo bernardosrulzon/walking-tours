@@ -764,16 +764,20 @@ fun StopScreen(
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 SectionTitle("Visitor information")
-                                InfoRow(
-                                    icon = Icons.Filled.ConfirmationNumber,
-                                    label = "Entrance fee",
-                                    value = buildString {
-                                        append(current.entranceFeeTry)
-                                        if (current.entranceFeeNote.isNotBlank()) {
-                                            append("\n${current.entranceFeeNote}")
-                                        }
-                                    },
-                                )
+                                // Covered stops carry no fee of their own; the tour's ticket card
+                                // states the combined ticket once.
+                                if (current.entranceFeeTry.isNotBlank()) {
+                                    InfoRow(
+                                        icon = Icons.Filled.ConfirmationNumber,
+                                        label = "Entrance fee",
+                                        value = buildString {
+                                            append(current.entranceFeeTry)
+                                            if (current.entranceFeeNote.isNotBlank()) {
+                                                append("\n${current.entranceFeeNote}")
+                                            }
+                                        },
+                                    )
+                                }
                                 InfoRow(
                                     icon = Icons.Filled.Schedule,
                                     label = "Opening hours",

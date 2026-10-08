@@ -134,6 +134,13 @@ fun TourDetailScreen(
     val visited = progress.map { it.stopId }.toSet()
     val totalStopMinutes = stops.sumOf { it.suggestedMinutes }
     val ticketed = stops.filter { !it.isFree }
+    // When every ticketed stop shares one note — a tour covered by a single combined ticket — say
+    // that once instead of repeating it down a list of stops.
+    val sharedTicketNote = ticketed
+        .map { it.entranceFeeNote.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .singleOrNull()
 
     Scaffold(
         bottomBar = {
@@ -310,8 +317,13 @@ fun TourDetailScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "${stops.size - ticketed.size} of ${stops.size} stops are free. " +
-                            "${ticketed.size} need a ticket.",
+                        text = if (sharedTicketNote != null) {
+                            "${stops.size - ticketed.size} of ${stops.size} stops are free; one " +
+                                "ticket covers the rest."
+                        } else {
+                            "${stops.size - ticketed.size} of ${stops.size} stops are free. " +
+                                "${ticketed.size} need a ticket."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
@@ -325,28 +337,37 @@ fun TourDetailScreen(
                     )
                     if (ticketed.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
-                        ticketed.forEach { stop ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = "${stop.order}. ${stop.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    text = stop.entranceFeeTry,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    textAlign = TextAlign.End,
-                                    // Cap the fee column so a long price string cannot squeeze
-                                    // the stop name down to one word per line.
-                                    modifier = Modifier.weight(1f),
-                                )
+                        if (sharedTicketNote != null) {
+                            Text(
+                                text = sharedTicketNote,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                        } else {
+                            ticketed.forEach { stop ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        text = "${stop.order}. ${stop.name}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = stop.entranceFeeTry,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        textAlign = TextAlign.End,
+                                        // Cap the fee column so a long price string cannot squeeze
+                                        // the stop name down to one word per line.
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
                             }
                         }
                     }
@@ -485,19 +506,22 @@ private fun StopRow(stop: StopEntity, visited: Boolean, onClick: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("${stop.suggestedMinutes} min")
-                    Pill(
-                        text = stop.entranceFeeTry,
-                        container = if (stop.isFree) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.tertiaryContainer
-                        },
-                        contentColor = if (stop.isFree) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onTertiaryContainer
-                        },
-                    )
+                    // Covered stops have no fee of their own; the tour's ticket card says so once.
+                    if (stop.entranceFeeTry.isNotBlank()) {
+                        Pill(
+                            text = stop.entranceFeeTry,
+                            container = if (stop.isFree) {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            },
+                            contentColor = if (stop.isFree) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            },
+                        )
+                    }
                 }
             }
             if (visited) {

@@ -23,6 +23,9 @@ class ContentSeeder(
     private val dao: TourDao,
 ) {
 
+    private val prefs = context.applicationContext
+        .getSharedPreferences("bundled_content", Context.MODE_PRIVATE)
+
     suspend fun seedIfEmpty() {
         // Seed any tour whose id is not in the database yet, so a bundle that adds a new tour file
         // is picked up on the next launch even though the app has run before. Already-seeded tours
@@ -39,6 +42,15 @@ class ContentSeeder(
             return
         }
 
+        // A content change — a tour edited, a price corrected — has to reach a device that already
+        // holds the old copy, and the per-tour loop below would skip it. So bump [CONTENT_VERSION]
+        // and the whole bundle is re-seeded. Progress and settings live in their own tables and are
+        // left alone.
+        if (prefs.getString(KEY_VERSION, null) != CONTENT_VERSION) {
+            dao.clearAllStops()
+            dao.clearAllTours()
+        }
+
         for (name in assetNames.sorted()) {
             try {
                 val json = context.assets.open("$ASSET_DIR/$name")
@@ -53,6 +65,8 @@ class ContentSeeder(
                 Log.e(TAG, "Failed to seed tour from $name", e)
             }
         }
+
+        prefs.edit().putString(KEY_VERSION, CONTENT_VERSION).apply()
     }
 
     private suspend fun seedFromJson(root: JSONObject) {
@@ -110,5 +124,12 @@ class ContentSeeder(
         const val TAG = "ContentSeeder"
         const val ASSET_DIR = "tours"
         const val DEFAULT_RADIUS_METERS = 40
+
+        /**
+         * Bump whenever the bundled JSON changes, so an already-seeded device re-imports it. Not
+         * the Room schema version — that is separate.
+         */
+        const val CONTENT_VERSION = "2"
+        const val KEY_VERSION = "content_version"
     }
 }

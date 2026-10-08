@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
@@ -452,6 +454,9 @@ fun StopScreen(
                 val stopIndex = stopIndexFor(page)
                 val pageStop = pageStops.getOrNull(stopIndex)
                 val pageStopId = pageStop?.id
+                // The transcript is collapsed by default: the audio is the point, and the page has
+                // plenty to say without it. Tapping the header opens it.
+                var transcriptOpen by remember(page) { mutableStateOf(false) }
                 val isCurrentStop = pageStopId != null && pageStopId == state.currentStopId
                 val highlightApplies = isCurrentStop && narration.stopId == pageStopId
                 val previousPage = page - 1
@@ -580,11 +585,40 @@ fun StopScreen(
                                         onRateChange = { session.setNarrationRate(it) },
                                         message = if (overviewPlaying) narration.message else null,
                                     )
-                                    Spacer(Modifier.height(14.dp))
-                                    Transcript(
-                                        text = guideText(TourSessionManager.OVERVIEW_ID, state.overviewText),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { transcriptOpen = !transcriptOpen },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "Transcript",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Icon(
+                                            imageVector = if (transcriptOpen) {
+                                                Icons.Filled.ExpandLess
+                                            } else {
+                                                Icons.Filled.ExpandMore
+                                            },
+                                            contentDescription = if (transcriptOpen) {
+                                                "Hide transcript"
+                                            } else {
+                                                "Show transcript"
+                                            },
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    if (transcriptOpen) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Transcript(
+                                            text = guideText(TourSessionManager.OVERVIEW_ID, state.overviewText),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -688,10 +722,36 @@ fun StopScreen(
 
                         if (current.id !in guideLoading) {
                             Column(Modifier.padding(16.dp)) {
-                                SectionTitle("Transcript")
-                                Transcript(
-                                    text = guideText(current.id, current.narration),
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { transcriptOpen = !transcriptOpen },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "Transcript",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = if (transcriptOpen) {
+                                            Icons.Filled.ExpandLess
+                                        } else {
+                                            Icons.Filled.ExpandMore
+                                        },
+                                        contentDescription = if (transcriptOpen) {
+                                            "Hide transcript"
+                                        } else {
+                                            "Show transcript"
+                                        },
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (transcriptOpen) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Transcript(text = guideText(current.id, current.narration))
+                                }
                             }
                         }
 
@@ -902,8 +962,13 @@ private fun TuneStopSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onChangeGuide) { Text("Change guide or interests") }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = { onApply(note) }, enabled = note.isNotBlank()) {
-                    Text("Apply")
+                Button(
+                    onClick = { onApply(note) },
+                    // Enabled with an empty field when there is a tone to clear, so a walker who
+                    // deletes the text can still save that.
+                    enabled = note.isNotBlank() || initialTone.isNotBlank(),
+                ) {
+                    Text(if (note.isBlank()) "Clear" else "Apply")
                 }
             }
             Spacer(Modifier.height(8.dp))

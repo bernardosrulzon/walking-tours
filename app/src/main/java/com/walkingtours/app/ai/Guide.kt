@@ -64,8 +64,33 @@ val FALLBACK_GUIDES: List<Guide> = listOf(
         "professor", "Professor Deniz", "Precise, surprising, never dull.",
         "clear and factual; ties the small thing to the big picture without fuss",
     ),
+)
+
+/**
+ * The same personas in Brazilian Portuguese.
+ *
+ * Only the name and the tagline are translated — they are the two the walker reads. The style stays
+ * in English because it is an instruction to the narrator, not something shown or spoken.
+ */
+val FALLBACK_GUIDES_PT: List<Guide> = listOf(
     Guide(
-        "poet", "Emre the Poet", "Slow down. Look again.",
-        "lyrical and sensory; finds the beauty in worn stone and small moments",
+        "storyteller", "Meryem, a Contadora de Histórias", "Toda pedra tem uma história.",
+        "warm and anecdotal; opens with a scene and a person, then widens out",
+    ),
+    Guide(
+        "detective", "Kemal, o Detetive", "Pergunte a quem aquilo interessava.",
+        "dry and curious; follows money, motives and the version nobody printed",
+    ),
+    Guide(
+        "local", "Leyla, a Local", "O guia sempre esquece o almoço.",
+        "chatty and practical; food, people and everyday life, present tense",
+    ),
+    Guide(
+        "professor", "Professor Deniz", "Preciso, surpreendente, nunca monótono.",
+        "clear and factual; ties the small thing to the big picture without fuss",
     ),
 )
+
+/** The built-in guides in the chosen narration language. */
+fun fallbackGuides(language: String): List<Guide> =
+    if (language == NARRATION_LANGUAGE_PT_BR) FALLBACK_GUIDES_PT else FALLBACK_GUIDES

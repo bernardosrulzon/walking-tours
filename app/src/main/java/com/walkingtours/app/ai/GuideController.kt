@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "5"
+const val NARRATION_PROMPT_VERSION = "7"
 
 fun guideSignature(
     guide: Guide?,
@@ -150,14 +150,15 @@ class GuideController(
      * the model cannot be reached. Never throws.
      */
     suspend fun suggestGuides(tourId: String, explorers: List<ExplorerType>): List<Guide> {
-        if (!settings.current.hasGeminiKey) return FALLBACK_GUIDES
-        val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return FALLBACK_GUIDES
+        val language = settings.current.narrationLanguage
+        if (!settings.current.hasGeminiKey) return fallbackGuides(language)
+        val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return fallbackGuides(language)
         val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
-        return runCatching { requestGuides(tour, stops, explorers) }
+        return runCatching { requestGuides(tour, stops, explorers, language) }
             .onFailure { Log.w(TAG, "Guide suggestion failed; using fallback guides", it) }
             .getOrNull()
             ?.takeIf { it.size >= 3 }
-            ?: FALLBACK_GUIDES
+            ?: fallbackGuides(language)
     }
 
     /**
@@ -225,7 +226,13 @@ class GuideController(
         tour: TourEntity,
         stops: List<StopEntity>,
         explorers: List<ExplorerType>,
+        language: String,
     ): List<Guide> {
+        val languageName = if (language == NARRATION_LANGUAGE_PT_BR) {
+            "Brazilian Portuguese"
+        } else {
+            "English"
+        }
         val text = geminiClient.generate(
             model = resolvedModel(),
             systemInstruction = GUIDE_SYSTEM,
@@ -242,10 +249,12 @@ class GuideController(
                     appendLine("The stops, in order: ${stops.joinToString(", ") { it.name }}.")
                 }
                 appendLine()
-                appendLine("Invent exactly 5 distinct guide personalities to narrate this walk to that walker.")
+                appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker.")
                 appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be five versions of the same curious local.")
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
-                append("Reply with ONLY a JSON array of 5 objects, each with keys name, tagline (max 12 words) and style (one sentence on how this guide speaks, for a narrator to imitate).")
+                appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
+                appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
+                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words) and style (one sentence on how this guide speaks, for a narrator to imitate).")
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,
@@ -319,6 +328,8 @@ class GuideController(
             appendLine("Brazilian rhythm and word order, natural colloquialisms where this guide's voice")
             appendLine("calls for them, idioms that land in Portuguese rather than calques of English")
             appendLine("ones. Restructure, merge and split sentences freely until nothing sounds translated.")
+            appendLine("Render your own name and epithet in Portuguese as well — \"Meryem the Storyteller\"")
+            appendLine("becomes \"Meryem, a Contadora de Histórias\" — so you introduce yourself in the same tongue.")
         }
         if (!tone.isNullOrBlank()) {
             appendLine()
@@ -343,6 +354,9 @@ class GuideController(
             appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")
             appendLine("you get excited about from all of them.")
         }
+        appendLine("The place comes first. Your interests and any adjustment shape what you notice and how")
+        appendLine("you tell it, but never force a topic, a joke or a tone that does not fit what is actually")
+        appendLine("here. If an interest has nothing to say about this stop, let it go and tell the stop well.")
         appendLine()
         appendLine("You have complete freedom to rewrite the script however the telling demands. Restructure")
         appendLine("it. Change the emphasis, the order and the framing. Cut what drags, expand what sings,")

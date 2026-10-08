@@ -4,6 +4,7 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.walkingtours.app.ai.AiSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +26,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - Android's TTS has no pause, so [pause] records the current offset and stops, and [resume]
  *    speaks the remaining text. To the user that behaves like a pause button.
  */
-class AndroidTtsNarrationEngine(private val context: Context) : NarrationEngine {
+class AndroidTtsNarrationEngine(
+    private val context: Context,
+    private val settings: AiSettings,
+) : NarrationEngine {
 
     private val _progress = MutableStateFlow(NarrationProgress())
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
@@ -97,11 +101,19 @@ class AndroidTtsNarrationEngine(private val context: Context) : NarrationEngine 
         }
     }
 
+    /** Re-apply the narration language after the walker changes it in Settings. */
+    fun refreshLanguage() {
+        if (ready.get()) configureLanguage()
+    }
+
     private fun configureLanguage() {
         val engine = tts ?: return
-        // Prefer an American voice for the narration's neutral register, but accept any English
-        // voice the device actually ships rather than falling back to silence.
-        for (locale in listOf(Locale.US, Locale.UK, Locale.ENGLISH)) {
+        // Follow the walker's chosen narration language — Portuguese for a Portuguese tour — and only
+        // fall through to English if the phone ships no voice for it, rather than reading the whole
+        // walk aloud with the wrong accent.
+        val preferred = Locale.forLanguageTag(settings.current.narrationLanguage)
+        val candidates = listOf(preferred, Locale.US, Locale.UK, Locale.ENGLISH).distinct()
+        for (locale in candidates) {
             val result = engine.setLanguage(locale)
             if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
                 break

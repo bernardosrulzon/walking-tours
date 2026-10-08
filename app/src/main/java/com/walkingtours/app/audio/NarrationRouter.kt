@@ -38,7 +38,7 @@ class NarrationRouter(
     private val _progress = MutableStateFlow(NarrationProgress())
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
-    private val deviceEngine = AndroidTtsNarrationEngine(context)
+    private val deviceEngine = AndroidTtsNarrationEngine(context, settings)
     private var cloudEngine: GeminiTtsNarrationEngine? = null
 
     private var progressJob: Job? = null
@@ -47,7 +47,7 @@ class NarrationRouter(
     private var usingDeviceFallback = false
 
     /** Identifies the current configuration, so we only rebuild when the choice really changed. */
-    private var activeKey: String = DEVICE_KEY
+    private var activeKey: String = ""
 
     private var lastRequest: Request? = null
 
@@ -87,9 +87,9 @@ class NarrationRouter(
     fun refreshFromSettings() {
         val state = settings.current
         val desiredKey = if (state.cloudVoiceReady) {
-            "cloud:${state.cloudVoiceName}:${state.ttsApiKey.hashCode()}"
+            "cloud:${state.cloudVoiceName}:${state.ttsApiKey.hashCode()}:${state.narrationLanguage}"
         } else {
-            DEVICE_KEY
+            "device:${state.narrationLanguage}"
         }
         if (desiredKey == activeKey) return
 
@@ -103,6 +103,10 @@ class NarrationRouter(
         } else {
             null
         }
+
+        // The phone's voice bakes its locale when it is configured, so a language change has to
+        // reach it directly; the cloud engine reads the language per request.
+        deviceEngine.refreshLanguage()
 
         _progress.value = NarrationProgress()
         bind()
@@ -165,6 +169,5 @@ class NarrationRouter(
 
     private companion object {
         const val TAG = "NarrationRouter"
-        const val DEVICE_KEY = "device"
     }
 }

@@ -1,4 +1,4 @@
-<img src="app/src/main/res/drawable-nodpi/ic_launcher_foreground.jpg" width="190" align="right" alt="Two grinning travellers take a selfie on a forest path under a Turkish flag">
+<p align="center"><img src="app/src/main/res/drawable-nodpi/ic_launcher_foreground.jpg" width="200" alt="Two grinning travellers take a selfie on a forest path under a Turkish flag"></p>
 
 # Walking Tours
 

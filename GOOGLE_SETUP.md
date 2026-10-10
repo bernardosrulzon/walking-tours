@@ -120,14 +120,14 @@ With a key present at build time, the cloud voice is switched on automatically.
 
 ---
 
-## Step 7 — Choose a voice
+## Step 7 — Switch the voice on
 
-In Settings, tap **Load voices**. You will get the built-in Gemini voices for the language
-selected. `Kore` is the default and a good starting point.
+In Settings, turn on **Use Gemini voice**. The status line under it reports whether the key works
+(Gemini API working, or not working with the reason), and the cloud voice is used whenever the
+switch is on.
 
-Tap **Test** to hear one, then tap a voice in the list to select it.
-
-![AI settings](docs/screenshots/10-ai-settings.png)
+The voice is matched automatically to your chosen guide, so a guide never sounds like the wrong
+person. There is nothing to pick by hand.
 
 ---
 

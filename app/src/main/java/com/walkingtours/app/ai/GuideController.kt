@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "7"
+const val NARRATION_PROMPT_VERSION = "10"
 
 fun guideSignature(
     guide: Guide?,
@@ -154,7 +154,7 @@ class GuideController(
     }
 
     /**
-     * Five guide options for [tourId] and these ranked preferences, or the built-in fallbacks when
+     * Four guide options for [tourId] and these ranked preferences, or the built-in fallbacks when
      * the model cannot be reached. Never throws.
      */
     suspend fun suggestGuides(tourId: String, explorers: List<ExplorerType>): List<Guide> {
@@ -282,8 +282,9 @@ class GuideController(
                     appendLine("The stops, in order: ${stops.joinToString(", ") { it.name }}.")
                 }
                 appendLine()
-                appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker.")
-                appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be five versions of the same curious local.")
+                appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker: 2 contemporary, everyday guides (a local, a professional, a neighbor — people who could plausibly walk this route today) and 2 voices from old professions that belong to this place and era (a ferryman, a scribe, a spice merchant — never an archivist, curator, or historian).")
+                appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be four versions of the same curious local; the old-profession voices must feel lived-in, not academic: they worked here, they did not study it.")
+                appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
                 appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
                 appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
@@ -391,18 +392,37 @@ class GuideController(
         appendLine("you tell it, but never force a topic, a joke or a tone that does not fit what is actually")
         appendLine("here. If an interest has nothing to say about this stop, let it go and tell the stop well.")
         appendLine()
-        appendLine("You have complete freedom to rewrite the script however the telling demands. Restructure")
-        appendLine("it. Change the emphasis, the order and the framing. Cut what drags, expand what sings,")
-        appendLine("add your own asides, judgements and digressions. It should be unmistakably you, and")
-        appendLine("unmistakably for this walker. If someone heard the original and yours, they should never")
-        appendLine("think they were the same recording.")
+        appendLine("Adapt the script to your voice and experience: restructure it, change the emphasis")
+        appendLine("and the framing, cut what drags, add relevant color and asides only you would know. But the")
+        appendLine("fallback script is the spine — keep its storyline, its stops and its facts. Adapt it, do not")
+        appendLine("overhaul it: a walker who heard both versions should recognize the same walk, told by you.")
+        appendLine()
+        appendLine("Stay in character the whole way, but do not overdo it. The persona is a voice and a way")
+        appendLine("of noticing, not a costume: speak as the character would, and let the performance serve")
+        appendLine("the place rather than itself. Never force a joke, an accent tic or a catchphrase where it")
+        appendLine("does not belong, and never let the act bury the facts.")
+        appendLine()
+        appendLine("Hold every part to this bar: when the stop ends, the walker should feel they learned")
+        appendLine("something real — a mechanism, a belief, a tension, a story that reframes the place. That")
+        appendLine("is balance, not density: plain sentences are fine when they carry something. Cut")
+        appendLine("platitudes (generic wonder, adjectives standing in for observation), throat-clearing")
+        appendLine("openers, stage directions that direct nothing, and descriptions where each clause teaches")
+        appendLine("nothing new. Humor and irreverence are delivery, never a substitute: every joke must land")
+        appendLine("on a fact.")
         appendLine()
         appendLine("The only things to hold on to:")
         appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
         appendLine("  or sights that were not there. Reframing is welcome; fabrication is not.")
-        appendLine("- Aim for about three minutes spoken, roughly 400 to 450 words. Shorter beats longer.")
+        appendLine("- Assume the walker knows nothing about this city or country. Explain every local term,")
+        appendLine("  currency unit, historical actor and religious concept inline, on first use, in a breath:")
+        appendLine("  who the Mughals were, what a lakh is, what a panda does, what moksha promises. Never")
+        appendLine("  use a word the walker cannot be expected to know without unpacking it right there.")
+        appendLine("- Aim for about three minutes spoken, roughly 400 to 450 words. Shorter beats longer —")
+        appendLine("  except the introduction, which may run to about five minutes when the city's context")
+        appendLine("  demands it. Clarity first, always.")
         appendLine("- Write for the ear: second person, present tense, plain prose. No markdown, no lists,")
-        appendLine("  no headings, no bracketed stage directions.")
+        appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
+        appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
         appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
         appendLine("  teller would — never a tag in every sentence.")
@@ -487,6 +507,10 @@ class GuideController(
 
 /**
  * The on-screen transcript: the performance tags are for the voice, not the eye, so they come out.
+ * Paragraph breaks survive: collapsing them is what turned the transcript into a wall of text.
  */
 fun stripSpeechTags(text: String): String =
-    text.replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim()
+    text.replace(Regex("<[^>]+>"), " ")
+        .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
+        .replace(Regex("(?:[ \\t]*\\n){2,}"), "\n\n")
+        .trim()

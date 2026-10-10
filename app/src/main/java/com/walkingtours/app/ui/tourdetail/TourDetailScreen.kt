@@ -20,13 +20,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Signpost
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -51,10 +53,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
+import java.util.Locale
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.ui.chat.ChatBottomSheet
@@ -170,15 +172,6 @@ fun TourDetailScreen(
         visited.isEmpty() -> "Start tour"
         else -> "Resume tour"
     }
-    val ticketed = stops.filter { !it.isFree }
-    // When every ticketed stop shares one note — a tour covered by a single combined ticket — say
-    // that once instead of repeating it down a list of stops.
-    val sharedTicketNote = ticketed
-        .map { it.entranceFeeNote.trim() }
-        .filter { it.isNotBlank() }
-        .distinct()
-        .singleOrNull()
-
     Scaffold(
         bottomBar = {
             // Two fixed actions, thumb-sized: Ask opens the assistant sheet, Start begins or
@@ -262,7 +255,7 @@ fun TourDetailScreen(
             // in a moment later.
             if (tourEntity == null) return@Column
 
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 Text(
                     text = tourEntity?.title ?: "Loading\u2026",
                     style = MaterialTheme.typography.headlineMedium,
@@ -316,7 +309,7 @@ fun TourDetailScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.Explore,
+                                Icons.Filled.RecordVoiceOver,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(22.dp),
@@ -325,25 +318,22 @@ fun TourDetailScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "Your guide",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = guide?.name ?: "Not chosen yet",
+                                text = "Change your guide",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            guide?.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
-                                Text(
-                                    text = tagline,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                )
-                            }
+                            Text(
+                                text = guide?.let { g ->
+                                    listOfNotNull(
+                                        g.name.takeIf { it.isNotBlank() },
+                                        g.tagline.takeIf { it.isNotBlank() },
+                                    ).joinToString(" \u00b7 ")
+                                } ?: "Not chosen yet",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
                         }
                         TextButton(onClick = onOpenPersona) {
                             Text(if (guide == null) "Choose" else "Change")
@@ -371,7 +361,7 @@ fun TourDetailScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.Explore,
+                                Icons.Filled.Signpost,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(22.dp),
@@ -397,88 +387,50 @@ fun TourDetailScreen(
                         }
                     }
                 }
-            }
 
-            // ---- Ticket summary -------------------------------------------------
-            // Outlined like the guide/detour panels: a long ticket list must not become a wall
-            // of colour. The tint lives in the icon box only.
-            InfoCard(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                // ---- Ticket summary ---------------------------------------------
+                // One line: how many stops cost money and, when the fees resolve to a single
+                // currency, what they add up to. The per-stop fees are on the stop rows below, so
+                // this card does not repeat them. Same 12dp rhythm as the panels above.
+                Spacer(Modifier.height(12.dp))
+                InfoCard(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    // Same shape as the guide and detour panels: a 44dp tinted icon box, a title
+                    // and a supporting line. A ticket icon says the subject at a glance.
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(44.dp)
                                 .background(
                                     MaterialTheme.colorScheme.tertiaryContainer,
-                                    RoundedCornerShape(12.dp),
+                                    RoundedCornerShape(14.dp),
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.Info,
+                                Icons.Filled.ConfirmationNumber,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(22.dp),
                             )
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "Tickets and entrance fees",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = if (sharedTicketNote != null) {
-                            "${stops.size - ticketed.size} of ${stops.size} stops are free; one " +
-                                "ticket covers the rest."
-                        } else {
-                            "${stops.size - ticketed.size} of ${stops.size} stops are free. " +
-                                "${ticketed.size} need a ticket."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Turkish museum prices change frequently, sometimes more than " +
-                            "once a year. Treat every figure in this app as a guide and check " +
-                            "at the gate.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (ticketed.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
-                        if (sharedTicketNote != null) {
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                text = sharedTicketNote,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
+                                text = "Tickets and entrance fees",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
                             )
-                        } else {
-                            ticketed.forEach { stop ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        text = "${stop.order}. ${stop.name}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        text = stop.entranceFeeTry,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        textAlign = TextAlign.End,
-                                        // Cap the fee column so a long price string cannot squeeze
-                                        // the stop name down to one word per line.
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
+                            ticketSummary(stops)?.let { summary ->
+                                Text(
+                                    text = summary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -486,13 +438,22 @@ fun TourDetailScreen(
             }
 
             // ---- Practicalities -------------------------------------------------
+            // Difficulty and the best time in two short sentences: the full guidance lives on the
+            // stops where it is actually needed.
             Column(Modifier.padding(16.dp)) {
                 SectionTitle("Know before you go")
-                tourEntity?.difficulty?.takeIf { it.isNotBlank() }?.let {
-                    LabeledParagraph("Difficulty", it)
-                }
-                tourEntity?.bestTimeOfDay?.takeIf { it.isNotBlank() }?.let {
-                    LabeledParagraph("Best time", it)
+                val knowBefore = buildList {
+                    tourEntity?.difficulty?.takeIf { it.isNotBlank() }
+                        ?.let { add("Difficulty: ${firstSentence(it)}") }
+                    tourEntity?.bestTimeOfDay?.takeIf { it.isNotBlank() }
+                        ?.let { add("Best time: ${firstSentence(it)}") }
+                }.joinToString(" ")
+                if (knowBefore.isNotBlank()) {
+                    Text(
+                        text = knowBefore,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
@@ -557,16 +518,99 @@ fun TourDetailScreen(
     }
 }
 
-@Composable
-private fun LabeledParagraph(label: String, value: String) {
-    Column(Modifier.padding(bottom = 10.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+/**
+ * The first sentence of a paragraph, so "Know before you go" can show a compact version of the
+ * long authored difficulty and best-time notes. Falls back to the whole text when there is no
+ * sentence break to cut at.
+ */
+private fun firstSentence(text: String): String {
+    val trimmed = text.trim()
+    val end = trimmed.indexOf(". ")
+    return if (end in 1 until trimmed.lastIndex) trimmed.substring(0, end + 1) else trimmed
+}
+
+/** A price read out of a free-text fee string: the currency as displayed, and the amount. */
+private data class FeeAmount(val currency: String, val value: Double)
+
+/** Numbers in a fee string, commas removed so "1,950" reads as 1950. */
+private val FEE_NUMBER = Regex("""\d[\d,]*(?:\.\d+)?""")
+
+/**
+ * Currency tokens as they appear in the authored fees, in the order they must be tested (multi-
+ * character symbols before the single characters they contain), each mapped to how it is shown.
+ */
+private val FEE_CURRENCIES = listOf(
+    "HK$" to "HK$",
+    "MOP" to "MOP",
+    "CNY" to "¥",
+    "yuan" to "¥",
+    "¥" to "¥",
+    "₹" to "₹",
+    "Rs" to "₹",
+    "TL" to "TL",
+    "₺" to "TL",
+    "EUR" to "€",
+    "€" to "€",
+    "AZN" to "₼",
+    "₼" to "₼",
+)
+
+private fun feeCurrency(raw: String): String? =
+    FEE_CURRENCIES.firstOrNull { (token, _) -> raw.contains(token) }?.second
+
+/**
+ * One short sentence for the ticket card: how many stops need a ticket, plus a total when the
+ * fees resolve cleanly.
+ *
+ * Fees are authored as free text in different currencies and forms ("About ¥30", "Rs 1,000",
+ * "About ₹50 (Indians) / ₹1,100 (foreigners)"), so a sum is only shown when every priced stop
+ * shares one currency and reads as a single amount. Ranges and dual prices — where a total would
+ * be a guess — fall back to the count alone. Blank fees and "Covered" mean no separate charge and
+ * are skipped.
+ */
+private fun ticketSummary(stops: List<StopEntity>): String? {
+    if (stops.isEmpty()) return null
+    val ticketed = stops.filter { !it.isFree }
+    if (ticketed.isEmpty()) return "Every stop on this walk is free."
+
+    // Currency -> running total. A LinkedHashMap so the order of currencies is stable.
+    val totals = LinkedHashMap<String, Double>()
+    for (stop in ticketed) {
+        val raw = stop.entranceFeeTry
+        val amounts = FEE_NUMBER.findAll(raw)
+            .mapNotNull { it.value.replace(",", "").toDoubleOrNull() }
+            .toList()
+        val currency = feeCurrency(raw)
+        // No amount, or an amount we cannot attribute to a currency: covered by another ticket,
+        // or an unquantified charge. Either way it adds nothing to a total we can vouch for.
+        if (amounts.isEmpty() || currency == null) continue
+        // One amount is exact; a range ("about ¥30–40") contributes its midpoint as the "about"
+        // figure, which is what the ~ prefix already promises.
+        val value = if (amounts.size == 1) amounts.first() else amounts.average()
+        totals[currency] = (totals[currency] ?: 0.0) + value
     }
+
+    if (totals.isEmpty()) return "${ticketed.size} of ${stops.size} stops need a ticket."
+    // A walk can legitimately price in more than one currency (the Istanbul tour uses euros for
+    // the hammam and lira for the museums), so each currency is totalled and shown on its own.
+    val total = totals.entries.joinToString(" + ") { (currency, value) ->
+        formatMoney(currency, formatTotal(value))
+    }
+    return "${ticketed.size} of ${stops.size} stops need a ticket, ~$total in total."
+}
+
+private fun formatTotal(total: Double): String =
+    if (total % 1.0 == 0.0) {
+        String.format(Locale.US, "%,d", total.toLong())
+    } else {
+        String.format(Locale.US, "%.2f", total)
+    }
+
+/** Places the amount the way each currency is written: €25, ₹1,200, HK$88, but 25 ₼. */
+private fun formatMoney(currency: String, amount: String): String = when (currency) {
+    "₼", "TL" -> "$amount $currency"
+    "MOP" -> "MOP $amount"
+    else -> "$currency$amount"
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -621,7 +665,12 @@ private fun StopRow(stop: StopEntity, visited: Boolean, onClick: () -> Unit) {
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(6.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    // Wrapped tags need row spacing too, or a fee that falls to a second line
+                    // touches the tag above it.
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Pill("${stop.suggestedMinutes} min")
                     // Covered stops have no fee of their own; the tour's ticket card says so once.
                     if (stop.entranceFeeTry.isNotBlank()) {

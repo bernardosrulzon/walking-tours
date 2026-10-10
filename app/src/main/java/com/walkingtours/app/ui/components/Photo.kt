@@ -4,9 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -26,13 +28,16 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Image
+import kotlin.math.roundToInt
 
 /**
  * Decodes a bundled asset photograph without pulling in an image-loading library.
  *
  * The images ship inside the APK, so there is no network, no cache and no cancellation problem to
- * solve — a straight background decode into an [ImageBitmap] is enough. Downsampling during decode
- * keeps memory sane: a 1200px JPEG is decoded at roughly the width it will be displayed at.
+ * solve — a straight background decode into an [ImageBitmap] is enough. Decoding is aimed at the
+ * width the photograph will be displayed at (see [decodeAsset]): the source images are wider than
+ * any card that shows them, and decoding one at full size costs megabytes of heap and a visible
+ * upload on the frame it first appears.
  */
 @Composable
 fun AssetPhoto(
@@ -107,6 +112,46 @@ private object AssetPhotoCache {
 }
 
 private fun decodeAsset(context: Context, path: String, targetWidthPx: Int): ImageBitmap? = try {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        decodeExact(context, path, targetWidthPx)
+    } else {
+        decodeHalved(context, path, targetWidthPx)
+    }
+} catch (e: Exception) {
+    null
+}
+
+/**
+ * Android 9 and later: scale while decoding.
+ *
+ * [ImageDecoder] resizes as it decodes, so a 1600 px JPEG that will be shown in a phone-width card
+ * is never materialised at full size — roughly a quarter of the heap and of the upload the GPU does
+ * the first time the image appears. It also honours the photograph's EXIF orientation, which
+ * [BitmapFactory] ignores.
+ *
+ * Why not [BitmapFactory] everywhere: its sampler can only halve. For these photographs the first
+ * halving already lands under the width the cards display at (1600 -> 800 for a 1080 px card), so
+ * it refuses to halve at all and hands back the full-size bitmap.
+ */
+private fun decodeExact(context: Context, path: String, targetWidthPx: Int): ImageBitmap {
+    val source = ImageDecoder.createSource(context.assets, path)
+    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+        // Software, exactly like the fallback path: one memory model for the cache and the UI.
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        val width = info.size.width
+        if (width > targetWidthPx) {
+            val height = (info.size.height * (targetWidthPx.toFloat() / width)).roundToInt()
+            decoder.setTargetSize(targetWidthPx, height.coerceAtLeast(1))
+        }
+    }
+    return bitmap.asImageBitmap()
+}
+
+/**
+ * The pre-Android-9 path: [BitmapFactory] with power-of-two downsampling, as the app always did.
+ * Kept for the two oldest supported versions (the app's own floor is API 26) rather than dropped.
+ */
+private fun decodeHalved(context: Context, path: String, targetWidthPx: Int): ImageBitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     context.assets.open(path).use { BitmapFactory.decodeStream(it, null, bounds) }
 
@@ -114,9 +159,7 @@ private fun decodeAsset(context: Context, path: String, targetWidthPx: Int): Ima
         inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, targetWidthPx)
     }
     val bitmap = context.assets.open(path).use { BitmapFactory.decodeStream(it, null, options) }
-    bitmap?.asImageBitmap()
-} catch (e: Exception) {
-    null
+    return bitmap?.asImageBitmap()
 }
 
 private fun calculateInSampleSize(width: Int, height: Int, targetWidth: Int): Int {

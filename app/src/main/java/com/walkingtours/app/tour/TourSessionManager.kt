@@ -110,6 +110,14 @@ class TourSessionManager(
         if (_state.value.isRunning) teardown()
         val token = ++sessionToken
 
+        // Promote to a foreground service now, on the tap, while the app is visibly in the
+        // foreground: Android 14+ only lets a location-type service go foreground from an eligible
+        // state, and by the time the content below finishes loading that moment may have passed
+        // (e.g. the permission dialog still on top). Starting it without location permission would
+        // also throw, so gate on the grant — a grant that lands later retries via
+        // onLocationPermissionChanged.
+        startServiceIfPermitted()
+
         narration.prepare { ok ->
             Log.i(TAG, "Narration engine ready=$ok (${narration.engineLabel})")
         }
@@ -328,6 +336,28 @@ class TourSessionManager(
             isRunning = false,
             showingOverview = false,
         )
+    }
+
+    /**
+     * Start the foreground service when it can legally go foreground: location must be granted.
+     * Called on tour start (while the app is up), again once content has loaded, and whenever the
+     * permission dialog resolves — whichever moment is eligible wins, and re-delivery to an already
+     * foreground service is harmless.
+     */
+    private fun startServiceIfPermitted() {
+        if (locationTracker.hasPermission()) TourForegroundService.start(context)
+    }
+
+    /**
+     * Called when the location permission dialog resolves. A tour begun before the grant could not
+     * promote itself to a foreground service; now that the grant may exist, try again while the app
+     * is in front of the user.
+     */
+    fun onLocationPermissionChanged() {
+        // Leases held before the grant (tour running, map open) carry a stale "permission needed"
+        // state: restart updates and clear the message whether or not a tour is running.
+        locationTracker.onPermissionChanged()
+        if (_state.value.isRunning) startServiceIfPermitted()
     }
 
     private fun observeLocation() {

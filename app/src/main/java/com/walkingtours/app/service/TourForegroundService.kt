@@ -118,17 +118,34 @@ class TourForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Must call startForeground promptly after being started, or the system kills us.
+        // Must call startForeground promptly after being started, or the system kills us. But going
+        // foreground can also throw: on Android 14+ a location-type service needs location permission
+        // plus an eligible (foreground) app state, and neither is guaranteed at the moment a start
+        // lands — the permission dialog may still be up, or a restart may arrive while pocketed. A
+        // tour without its foreground service still works while the app is open, so degrade instead
+        // of crashing, and never ask to be restarted into a state that cannot go foreground.
+        try {
+            val state = ServiceLocator.session.state.value
+            val progress = ServiceLocator.session.narration.progress.value
+            val notification = buildNotification(state, progress)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Declaring the location type is mandatory on Android 14+, where an undeclared type
+                // throws at runtime.
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Cannot run as a foreground service; continuing unprotected", e)
+            if (intent?.action == null) {
+                // A fresh start that cannot go foreground: stop instead of idling without protection.
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            // A transport-button press on an already-running service: handle it below anyway.
+        }
         val state = ServiceLocator.session.state.value
         val progress = ServiceLocator.session.narration.progress.value
-        val notification = buildNotification(state, progress)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Declaring the location type is mandatory on Android 14+, where an undeclared type
-            // throws at runtime.
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
 
         // Transport buttons that the notification itself owns. On Android 13+ the system media
         // control uses the MediaSession callbacks instead, but both paths must work.

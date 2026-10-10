@@ -70,6 +70,23 @@ class LocationTracker(private val context: Context) {
         if (leases == 0) stopUpdates()
     }
 
+    /**
+     * Called when the location permission dialog resolves. Updates started before the grant carry a
+     * stale state — leases held, nothing registered, "permission needed" showing — and without this
+     * the alert and the missing dot survive until the app is restarted, even though permission now
+     * exists. Re-run the start when leases are held but updates never began; refresh the message
+     * when permission went away mid-tour instead.
+     */
+    fun onPermissionChanged() {
+        if (leases == 0) return
+        if (!hasPermission()) {
+            if (running) stopUpdates()
+            _providerIssue.value = "Location permission is needed to trigger stops automatically."
+            return
+        }
+        if (!running) startUpdates()
+    }
+
     @SuppressLint("MissingPermission")
     private fun startUpdates() {
         val manager = locationManager ?: run {

@@ -12,13 +12,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.walkingtours.app.ui.nav.WalkingToursNavHost
+import com.walkingtours.app.ui.nav.WalkingToursNavHost
 import com.walkingtours.app.ui.theme.WalkingToursTheme
 
 class MainActivity : ComponentActivity() {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { /* The location tracker reports its own state to the UI if permission is refused. */ }
+    ) { grants ->
+        // This launcher asks for notifications at startup and location on tour start. Only a location
+        // grant matters here: a tour begun before the user answered could not start its foreground
+        // service, so retry now while the app is in front of the user.
+        if (grants.keys.any {
+            it == Manifest.permission.ACCESS_FINE_LOCATION ||
+                it == Manifest.permission.ACCESS_COARSE_LOCATION
+        }
+        ) {
+            // The location tracker reports a refusal to the UI itself if permission is missing.
+            ServiceLocator.session.onLocationPermissionChanged()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

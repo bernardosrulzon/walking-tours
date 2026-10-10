@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ui.components.AssetPhoto
+import com.walkingtours.app.util.CountryFlags
 
 /**
  * Entry level for a collection that grows beyond one walk: a card per city, each opening the list
@@ -92,15 +93,6 @@ fun CitiesScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
-                Text(
-                    text = "Pick a city, then a walk. Put your earphones in and let the app tell you " +
-                        "what you are looking at as you arrive.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
             items(cities.entries.toList(), key = { it.key }) { (city, cityTours) ->
                 Card(
                     onClick = { onOpenCity(city) },
@@ -131,25 +123,16 @@ fun CitiesScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = city,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                // Single-tour cities name the walk right here; multi-tour cities
-                                // list their walks one level down, so there is nothing to count.
-                                if (cityTours.size == 1) {
-                                    Text(
-                                        text = cityTours.first().title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.88f),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
+                            // The flag leads the name: it is what separates Shenzhen from Suzhou at a
+                            // glance on a list of grey-roofed skylines.
+                            val flag = CountryFlags.flag(cityTours.firstOrNull()?.country.orEmpty())
+                            Text(
+                                text = if (flag.isEmpty()) city else "$flag $city",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)

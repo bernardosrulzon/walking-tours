@@ -177,6 +177,8 @@ fun ChatBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // Pin the sheet colour so the composer can match it exactly (see InputRow).
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         // Handle the navigation bar inset ourselves: the sheet's default inset handling left the
         // input row underneath the system navigation bar on a 3-button-navigation device.
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
@@ -519,7 +521,9 @@ private fun InputRow(
     // the system back button itself. Intercept it here while the menu is open, so back closes the
     // menu rather than the whole chat sheet.
     BackHandler(enabled = showPhotoMenu) { showPhotoMenu = false }
-    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+    // Matches the sheet's own container colour (ModalBottomSheet defaults to surfaceContainerLow),
+    // so the composer reads as part of the sheet rather than a separate panel below it.
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shadowElevation = 6.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -528,7 +532,8 @@ private fun InputRow(
             // whole input reads as a single object rather than a text box followed by loose icons.
             Surface(
                 shape = RoundedCornerShape(26.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                // Same background as the sheet; the outline alone marks the field as the input.
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.weight(1f),
             ) {

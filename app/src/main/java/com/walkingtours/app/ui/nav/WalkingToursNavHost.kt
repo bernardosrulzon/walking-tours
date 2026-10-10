@@ -13,6 +13,7 @@ import androidx.navigation.navArgument
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.ui.cities.CitiesScreen
+import com.walkingtours.app.ui.detour.DetourScreen
 import com.walkingtours.app.ui.persona.PersonaScreen
 import com.walkingtours.app.ui.settings.SettingsScreen
 import com.walkingtours.app.ui.stop.StopScreen
@@ -43,10 +44,20 @@ object Routes {
      */
     const val PERSONA = "tour/{tourId}/persona?start={start}&entry={entry}"
 
+    /**
+     * A detour deep-dive: one generated chapter outside the pager. `topic` is the topic id the
+     * picker suggested; the page resolves it again, so a dead process or a changed suggestion set
+     * lands on an error rather than a blank page.
+     */
+    const val DETOUR = "tour/{tourId}/detour?topic={topic}"
+
     fun tourDetail(tourId: String) = "tour/$tourId"
 
     fun persona(tourId: String, start: Boolean, entry: TourEntry) =
         "tour/$tourId/persona?start=$start&entry=${entry.encode()}"
+
+    fun detour(tourId: String, topicId: String) =
+        "tour/$tourId/detour?topic=${android.net.Uri.encode(topicId)}"
 
     fun tourEntry(tourId: String, entry: TourEntry) = "tour/$tourId/stop?entry=${entry.encode()}"
 }
@@ -146,6 +157,7 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                 onResumeTour = { enterWalk(TourEntry.Resume) },
                 onStartOver = { enterWalk(TourEntry.StartOver) },
                 onOpenStop = { stopId -> enterWalk(TourEntry.Stop(stopId)) },
+                onOpenDetour = { topicId -> navController.navigate(Routes.detour(tourId, topicId)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
@@ -183,6 +195,27 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
                         navController.popBackStack()
                     }
                 },
+            )
+        }
+
+        composable(
+            route = Routes.DETOUR,
+            arguments = listOf(
+                navArgument("tourId") { type = NavType.StringType },
+                navArgument("topic") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { navEntry ->
+            val tourId = navEntry.arguments?.getString("tourId").orEmpty()
+            val topicId = navEntry.arguments?.getString("topic").orEmpty()
+            DetourScreen(
+                tourId = tourId,
+                topicId = topicId,
+                onBack = { navController.popBackStack() },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
 

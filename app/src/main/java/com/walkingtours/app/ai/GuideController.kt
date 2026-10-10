@@ -498,10 +498,247 @@ class GuideController(
         return if (start in 0 until end) cleaned.substring(start, end + 1) else null
     }
 
+    /**
+     * Up to 5 country-level topics worth a deeper listen, as context for this tour — history,
+     * geopolitics, culture, religion, economy. The guiding question: what would a newcomer most
+     * want explained about this country to understand the walk? Cached in memory by tour and
+     * language; empty on no key or failure, so the UI can tell those apart.
+     */
+    suspend fun suggestDetourTopics(tourId: String): List<DetourTopic> {
+        val language = settings.current.narrationLanguage
+        val cacheId = "$tourId|detours|$language"
+        detourTopics[cacheId]?.let { return it }
+        if (!settings.current.hasGeminiKey) return emptyList()
+        val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return emptyList()
+        val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
+        val topics = runCatching { requestDetourTopics(tour, stops, language) }
+            .onFailure { Log.w(TAG, "Detour topics failed", it) }
+            .getOrNull()
+            ?.take(5)
+        if (!topics.isNullOrEmpty()) detourTopics[cacheId] = topics
+        return topics.orEmpty()
+    }
+
+    /**
+     * The deep-dive narration for one detour topic — generated now if it has not been already.
+     * Null when there is no key or generation fails; unlike stops there is no authored text to fall
+     * back to, so the caller shows an error with a retry instead.
+     */
+    suspend fun detourNarration(tourId: String, topic: DetourTopic): SpokenLine? {
+        val persona = personaSettings.current
+        val guide = persona.guide(tourId)
+        val signature = detourSignature(tourId)
+        val key = cacheKey(tourId, "detour|${topic.id}")
+        _narrations.value[key]
+            ?.takeIf { it.signature == signature }
+            ?.let {
+                Log.i(TAG, "Cache hit for detour ${topic.id} (${it.text.length} chars)")
+                return SpokenLine(it.text, it.style)
+            }
+        if (!settings.current.hasGeminiKey) return null
+
+        val jobKey = "$signature|$key"
+        val deferred = detourJobs.getOrPut(jobKey) {
+            _loading.value = _loading.value + key.removePrefix("$tourId|")
+            scope.async {
+                val line = try {
+                    detour(tourId, guide, topic)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Detour failed for ${topic.id}", e)
+                    null
+                } finally {
+                    _loading.value = _loading.value - key.removePrefix("$tourId|")
+                    detourJobs.remove(jobKey)
+                }
+                // Cache only a real deep-dive, and only if nothing in the signature changed underneath.
+                if (line != null && detourSignature(tourId) == signature) {
+                    _narrations.value = _narrations.value + (key to GuideNarration(signature, line.text, line.style))
+                    persist()
+                    Log.i(TAG, "Wrote detour ${topic.id}: ${line.text.length} chars")
+                }
+                line
+            }
+        }
+        return deferred.await()
+    }
+
+    /**
+     * The guide's version of this detour if generated under the current signature, else null. The
+     * transcript reads through this; the audio plays only what this returns, so the two agree.
+     */
+    fun detourText(tourId: String, topicId: String): String? {
+        val signature = detourSignature(tourId)
+        val cached = _narrations.value[cacheKey(tourId, "detour|$topicId")] ?: return null
+        return if (cached.signature == signature) stripSpeechTags(cached.text) else null
+    }
+
+    /** Everything a cached detour depends on; a change regenerates, anything else reuses. */
+    fun detourSignature(tourId: String): String {
+        val persona = personaSettings.current
+        val guide = persona.guide(tourId)
+        return listOf(
+            NARRATION_PROMPT_VERSION,
+            guide?.id ?: "neutral",
+            guide?.style.orEmpty(),
+            persona.explorers.joinToString(",") { it.id },
+            persona.tone(tourId).orEmpty(),
+            settings.current.narrationLanguage,
+        ).joinToString("|")
+    }
+
+    private val detourTopics = mutableMapOf<String, List<DetourTopic>>()
+
+    /** In-flight detours, deduplicated like rewrites but nullable: a detour has no fallback text. */
+    private val detourJobs = mutableMapOf<String, Deferred<SpokenLine?>>()
+
+    private suspend fun requestDetourTopics(
+        tour: TourEntity,
+        stops: List<StopEntity>,
+        language: String,
+    ): List<DetourTopic> {
+        val languageName = if (language == NARRATION_LANGUAGE_PT_BR) {
+            "Brazilian Portuguese"
+        } else {
+            "English"
+        }
+        val text = geminiClient.generate(
+            model = resolvedModel(),
+            systemInstruction = DETOUR_SYSTEM,
+            history = emptyList(),
+            prompt = buildString {
+                appendLine("The country is ${tour.country}, the city ${tour.city}.")
+                appendLine("The tour is \"${tour.title}\": ${tour.summary}")
+                if (stops.isNotEmpty()) {
+                    appendLine("Its stops, in order: ${stops.joinToString(", ") { it.name }}.")
+                }
+                appendLine()
+                appendLine("Suggest up to 5 topics a newcomer would most want explained as context for this")
+                appendLine("walk. Each topic is the BIG PICTURE of this country or city — the broad subjects a")
+                appendLine("visitor should grasp: its history, religions, food, economy, politics, daily life.")
+                appendLine("Think chapter headings, not footnotes: every topic must stay at country or city level")
+                appendLine("and never narrow to one specific stop, sight, dish or battle. Range across domains —")
+                appendLine("at least one historical and one contemporary.")
+                appendLine("Title each topic plainly and concisely, in the form \"<Domain> – <plain subject>\", so")
+                appendLine("the subject is obvious at a glance: \"Food – what to eat here\", \"History – the empires")
+                appendLine("before this country\", \"Religion – faith and daily life\". Never a clever phrase, never")
+                appendLine("tied to a single sight, never so generic it could be anywhere (\"Culture\", \"History\")")
+                appendLine("and never so niche it needs explaining before it is even chosen.")
+                appendLine("Write titles and blurbs in $languageName, idiomatic and natural. Also give a short")
+                appendLine("Wikimedia Commons search query that would find a photograph of the subject.")
+                append("Reply with ONLY a JSON array of up to 5 objects, each with keys title, blurb (one short")
+                append(" sentence under 140 characters, saying why it matters here) and imageQuery (3-6 plain words).")
+            },
+            maxOutputTokens = 1500,
+            thinkingBudget = 0,
+        )
+
+        val json = JSONArray(extractJsonArray(text))
+        return buildList {
+            for (i in 0 until json.length()) {
+                json.optJSONObject(i)?.let { obj -> DetourTopic.fromJson(obj)?.let { add(it) } }
+            }
+        }
+    }
+
+    private suspend fun detour(
+        tourId: String,
+        guide: Guide?,
+        topic: DetourTopic,
+    ): SpokenLine {
+        val persona = personaSettings.current
+        val tour = repository.getTour(tourId)
+        val raw = geminiClient.generate(
+            model = resolvedModel(),
+            systemInstruction = detourSystem(
+                tour,
+                guide,
+                persona.explorers,
+                persona.tone(tourId),
+                settings.current.narrationLanguage,
+                topic,
+            ),
+            history = emptyList(),
+            prompt = buildString {
+                appendLine("Deep dive, about 500 words: \"${topic.title}\". ${topic.blurb}")
+                appendLine("This supersedes any shorter length mentioned elsewhere.")
+            },
+            maxOutputTokens = 4000,
+            thinkingBudget = 0,
+        )
+        return parseSpokenLine(raw, guide ?: NEUTRAL_DETOUR_GUIDE)
+            ?: throw IllegalStateException("The detour came back unusable")
+    }
+
+    private fun detourSystem(
+        tour: TourEntity?,
+        guide: Guide?,
+        explorers: List<ExplorerType>,
+        tone: String?,
+        language: String,
+        topic: DetourTopic,
+    ): String = buildString {
+        val portuguese = language == NARRATION_LANGUAGE_PT_BR
+        // Without a chosen guide the detour still works, in a neutral voice that belongs to no
+        // persona and changes nothing about the tour's own guide choice.
+        val voice = guide ?: NEUTRAL_DETOUR_GUIDE
+        appendLine("You are ${voice.name}. ${voice.tagline}")
+        appendLine("You are telling a walker standing in ${tour?.city ?: "this city"}, ${tour?.country ?: ""} about \"${topic.title}\": ${topic.blurb}")
+        appendLine("Speak in this style: ${voice.style}")
+        if (portuguese) {
+            appendLine()
+            appendLine("Write everything in Brazilian Portuguese (português do Brasil), except proper names")
+            appendLine("in their original form, the inline vocal tags exactly as they are (<laugh>, <sigh>,")
+            appendLine("<breath>, <cough>, <short pause>), and the \"style\" direction, which stays in English.")
+            appendLine()
+            appendLine("Important: do NOT translate sentence by sentence. Read for the facts, then tell it")
+            appendLine("fresh, the way a gifted Brazilian storyteller would speak it aloud.")
+        }
+        if (!tone.isNullOrBlank()) {
+            appendLine()
+            appendLine("But the walker has redirected you: \"$tone\". Where that conflicts with the persona")
+            appendLine("above, it wins. Apply it only where it belongs; never bend the truth to fit the bit.")
+        }
+        appendLine()
+        appendLine("Do not introduce yourself and do not greet the walker. Start straight in on the subject:")
+        appendLine("what it is, why it matters here, and the one or two things a newcomer most needs to")
+        appendLine("grasp. Assume the walker knows nothing about this country: explain every local term,")
+        appendLine("name and institution inline, on first use, in a breath.")
+        if (explorers.isNotEmpty()) {
+            appendLine("Their interests, in order: ${preferences(explorers)} — lean into those angles.")
+        }
+        appendLine("The place comes first: stay with this country and city, never drift into general travel")
+        appendLine("advice. Where people disagree, say so in one breath; never take a side, never dunk.")
+        appendLine()
+        appendLine("Hold this bar: when it ends, the walker should feel they learned something real. Cut")
+        appendLine("platitudes (generic wonder, adjectives standing in for observation) and throat-clearing")
+        appendLine("openers. Humor is delivery, never a substitute: every joke must land on a fact.")
+        appendLine()
+        appendLine("The only things to hold on to:")
+        appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
+        appendLine("  or sights that were not there. Reframing is welcome; fabrication is not. If you are")
+        appendLine("  unsure of something, leave it out rather than guessing.")
+        appendLine("- Write for the ear: second person where natural, plain prose. No markdown, no lists,")
+        appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
+        appendLine("  the transcript shows them as separate paragraphs.")
+        appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
+        appendLine("  teller would — never a tag in every sentence.")
+        appendLine()
+        appendLine("Also give a sustained style direction for the whole delivery, matching this voice and")
+        appendLine("the mood of the subject (for example \"warm and unhurried\").")
+        appendLine()
+        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
+    }
+
     private companion object {
         const val TAG = "GuideController"
         const val GUIDE_SYSTEM =
             "You design memorable tour-guide personalities for a walking-tour app. " +
+                "You reply with ONLY a JSON array, with no prose and no code fences."
+        const val DETOUR_SYSTEM =
+            "You propose deep-dive subjects for a walking-tour app's detours. " +
                 "You reply with ONLY a JSON array, with no prose and no code fences."
     }
 }

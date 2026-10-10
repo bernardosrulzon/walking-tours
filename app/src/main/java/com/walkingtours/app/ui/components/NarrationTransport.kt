@@ -63,6 +63,12 @@ fun NarrationTransport(
     onRateChange: (Float) -> Unit,
     message: String? = null,
     modifier: Modifier = Modifier,
+    /**
+     * False on pages with no neighbours — a detour is a single chapter, so there is nowhere to
+     * step to. The buttons are removed rather than disabled: a dead control invites the tap it
+     * cannot honour.
+     */
+    showPrevNext: Boolean = true,
 ) {
     val playing = state == NarrationState.PLAYING || state == NarrationState.PREPARING
     val unavailable = state == NarrationState.UNAVAILABLE
@@ -80,7 +86,9 @@ fun NarrationTransport(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TransportButton(R.drawable.ic_previous, "Previous stop", onClick = onPrevious)
+        if (showPrevNext) {
+            TransportButton(R.drawable.ic_previous, "Previous stop", onClick = onPrevious)
+        }
         TransportButton(R.drawable.ic_rewind_15, "Rewind 15 seconds", enabled = !unavailable, onClick = onRewind)
         FilledIconButton(
             onClick = onPlayPause,
@@ -94,7 +102,9 @@ fun NarrationTransport(
             )
         }
         TransportButton(R.drawable.ic_forward_15, "Forward 15 seconds", enabled = !unavailable, onClick = onForward)
-        TransportButton(R.drawable.ic_next, "Next stop", onClick = onNext)
+        if (showPrevNext) {
+            TransportButton(R.drawable.ic_next, "Next stop", onClick = onNext)
+        }
 
         Spacer(Modifier.width(8.dp))
         MinimalScrubber(

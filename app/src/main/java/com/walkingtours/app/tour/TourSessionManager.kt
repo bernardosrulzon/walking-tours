@@ -3,6 +3,7 @@ package com.walkingtours.app.tour
 import android.content.Context
 import android.util.Log
 import com.walkingtours.app.ai.GuideController
+import com.walkingtours.app.ai.DetourTopic
 import com.walkingtours.app.ai.NarrationRequest
 import com.walkingtours.app.audio.NarrationEngine
 import com.walkingtours.app.audio.NarrationState
@@ -21,6 +22,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/**
+ * The narration engine's utterance id for a detour chapter. Detours share the engine with stops
+ * but never the pager, so they need an id space of their own that the UI can match progress on.
+ */
+fun detourUtteranceId(topicId: String) = "detour|$topicId"
 
 /**
  * Everything that has to keep working while the walker is moving: location fixes, geofence
@@ -637,6 +644,32 @@ class TourSessionManager(
         guide.invalidate(tourId, OVERVIEW_ID)
         playOverview()
     }
+
+    /**
+     * Play a detour deep-dive: a generated side chapter with no page in the pager, no geofence and
+     * no neighbours. It deliberately touches none of the tour bookkeeping — current stop, visited
+     * set, resume marker — so the walk waits exactly where it was. The page shows its loading state
+     * until the text is ready; a failed generation surfaces through [detourError] with a retry.
+     */
+    fun playDetour(tourId: String, topic: DetourTopic) {
+        _detourError.value = null
+        // A new chapter cuts the previous audio at once, as a stop does.
+        narration.stop()
+        guide.ensureVoiceMatchesGuide(tourId)
+        narrationJob?.cancel()
+        narrationJob = scope.launch {
+            val line = guide.detourNarration(tourId, topic)
+            if (line == null) {
+                _detourError.value = "Couldn't load this detour. Check your connection and try again."
+                return@launch
+            }
+            narration.play(detourUtteranceId(topic.id), line.text, style = line.style)
+        }
+    }
+
+    /** The latest detour failure, if any; cleared on every new attempt. */
+    val detourError: StateFlow<String?> get() = _detourError.asStateFlow()
+    private val _detourError = MutableStateFlow<String?>(null)
 
     fun pauseNarration() = narration.pause()
 

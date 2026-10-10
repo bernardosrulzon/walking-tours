@@ -59,6 +59,7 @@ import com.walkingtours.app.ui.components.AssetPhoto
 import com.walkingtours.app.ui.components.Pill
 import com.walkingtours.app.ui.components.SectionTitle
 import com.walkingtours.app.ui.components.TourMap
+import com.walkingtours.app.ui.detour.DetourTopicsSheet
 import com.walkingtours.app.util.Formatters
 
 /**
@@ -83,6 +84,8 @@ fun TourDetailScreen(
     onStartOver: () -> Unit,
     /** Starts the walk at this stop and shows it. */
     onOpenStop: (String) -> Unit,
+    /** Opens a detour deep-dive on the chosen topic. */
+    onOpenDetour: (String) -> Unit,
     /** Opens the persona flow to choose or change the guide. */
     onOpenPersona: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -99,6 +102,21 @@ fun TourDetailScreen(
     // The chosen guide, shown on the page so the walker can see who is talking and change it.
     val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
     val guide = persona.guide(tourId)
+
+    // Detours are generated country-level context for this tour; the sheet lists them, and a pick
+    // navigates to the deep-dive page.
+    var showDetours by remember { mutableStateOf(false) }
+    if (showDetours) {
+        DetourTopicsSheet(
+            tourId = tourId,
+            onPick = { topic ->
+                showDetours = false
+                onOpenDetour(topic.id)
+            },
+            onOpenSettings = onOpenSettings,
+            onDismiss = { showDetours = false },
+        )
+    }
 
     // The overview map shows the walker too. It used to be the one map in the app without a "you
     // are here", because only a running tour ever asked for position updates.
@@ -287,6 +305,45 @@ fun TourDetailScreen(
                         }
                         TextButton(onClick = onOpenPersona) {
                             Text(if (guide == null) "Choose" else "Change")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                // A way off the route: generated deep-dives into the country behind the walk —
+                // history, politics, culture — told by the same guide, with no walking required.
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Explore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "Go on a detour",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                text = "The history, politics and culture behind this walk",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        TextButton(onClick = { showDetours = true }) {
+                            Text("Explore")
                         }
                     }
                 }

@@ -122,6 +122,19 @@ asides only it would know — but it must not completely overhaul the fallback c
 heard two personas' versions should recognize the same walk, told differently. Style, interests and
 feedback shape *how* it is told; the fallback decides *what* is told.
 
+## 10. Detours: generated side chapters
+
+Detours are country-level deep-dives (history, geopolitics, culture, religion, economy) generated
+per tour at runtime — there is no authored text, so nothing here lives in the JSON. The same voice
+rules apply: truth first, interests as a lens, plain words for newcomers, no sides taken. Topics
+stay at the big picture — broad chapter headings like "Food – what to eat here", never one stop,
+sight, dish or battle. Topic titles must state the subject plainly at a glance ("Religion in Turkey
+today", not "the politics of the holy space") — neither generic enough to fit anywhere nor so
+niche it needs explaining first. Photos are fetched at view time from Wikimedia Commons with the
+credit shown underneath, first freely-licensed JPEG wins; a missing photo is an empty panel, never
+an error. Detour narrations reuse the narration cache and signature, so regeneration rules are
+unchanged.
+
 ## 9. Before it ships
 
 - `python3 -c "import json; json.load(open(...))"` parses.

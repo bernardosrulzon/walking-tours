@@ -5,6 +5,10 @@ import android.util.Log
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.data.db.TourDao
 import com.walkingtours.app.data.db.TourEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
 
@@ -26,7 +30,38 @@ class ContentSeeder(
     private val prefs = context.applicationContext
         .getSharedPreferences("bundled_content", Context.MODE_PRIVATE)
 
+    /**
+     * One content pass per process, however many screens ask for one.
+     *
+     * Every screen that shows tours calls [seedIfEmpty] as it appears, and the pass it used to run
+     * read and parsed the whole asset bundle on the caller's thread — the main thread, from
+     * `LaunchedEffect` — in the middle of the navigation transition. Device traces put those reads
+     * and parses in the same frames as 40-60 ms main-thread stalls, which is exactly the stutter a
+     * walker sees on the way from a city to its tour list.
+     *
+     * Nothing can change between two calls in one process — the assets are packaged in the APK —
+     * so the first caller does the pass on IO and everyone after them returns immediately.
+     */
+    private val lock = Mutex()
+
+    @Volatile
+    private var checked = false
+
     suspend fun seedIfEmpty() {
+        if (checked) return
+        lock.withLock {
+            if (checked) return
+            withContext(Dispatchers.IO) { checkAndSeed() }
+            checked = true
+        }
+    }
+
+    /**
+     * The pass itself: lists, reads and parses the bundled assets, then inserts anything the
+     * database does not hold yet. Blocking work, so it runs on [Dispatchers.IO], never on the
+     * thread that called [seedIfEmpty].
+     */
+    private suspend fun checkAndSeed() {
         // Seed any tour whose id is not in the database yet, so a bundle that adds a new tour file
         // is picked up on the next launch even though the app has run before. Already-seeded tours
         // are left untouched: progress and settings keyed by tour/stop id keep working.
@@ -43,30 +78,55 @@ class ContentSeeder(
         }
 
         // A content change — a tour edited, a price corrected — has to reach a device that already
-        // holds the old copy, and the per-tour loop below would skip it. So bump [CONTENT_VERSION]
-        // and the whole bundle is re-seeded. Progress and settings live in their own tables and are
-        // left alone.
-        if (prefs.getString(KEY_VERSION, null) != CONTENT_VERSION) {
+        // holds the old copy, so bump [CONTENT_VERSION] and the whole bundle is re-seeded. Progress
+        // and settings live in their own tables and are left alone.
+        //
+        // An empty tours table counts as a fresh bundle too: this database is built with a
+        // destructive migration, so a schema change wipes the content without touching these
+        // preferences — and without this the app would believe the content was already there.
+        val freshBundle = prefs.getString(KEY_VERSION, null) != CONTENT_VERSION
+        val emptyDatabase = dao.tourCount() == 0
+        if (freshBundle || emptyDatabase) {
             dao.clearAllStops()
             dao.clearAllTours()
         }
 
+        // A file an earlier run already seeded does not need to be opened again. Its name is
+        // enough to skip it, which matters because the parse is the expensive half. A file the
+        // run has never seen is not in the set and is picked up even when the version did not
+        // change — the same promise the per-tour id check below used to keep.
+        val seededFiles = if (freshBundle || emptyDatabase) {
+            emptySet()
+        } else {
+            prefs.getStringSet(KEY_FILES, emptySet()).orEmpty()
+        }
+
+        val seeded = HashSet(seededFiles)
         for (name in assetNames.sorted()) {
+            if (name in seeded) continue
             try {
                 val json = context.assets.open("$ASSET_DIR/$name")
                     .bufferedReader()
                     .use { it.readText() }
                 val root = JSONObject(json)
                 val tourId = root.getJSONObject("tour").getString("id")
-                if (dao.getTour(tourId) != null) continue
-                seedFromJson(root)
+                // A database an earlier release filled (one that predates [KEY_FILES]) already
+                // holds this tour; remember the file and leave the rows alone. Writing them again
+                // would REPLACE the tour row, and the cascade would delete and re-insert its stops
+                // for no gain.
+                if (dao.getTour(tourId) == null) seedFromJson(root)
+                seeded += name
             } catch (e: Exception) {
-                // One malformed tour must not stop the others from loading.
+                // One malformed tour must not stop the others from loading. It stays out of the
+                // seeded set, so a corrected file is picked up by a later run.
                 Log.e(TAG, "Failed to seed tour from $name", e)
             }
         }
 
-        prefs.edit().putString(KEY_VERSION, CONTENT_VERSION).apply()
+        prefs.edit()
+            .putString(KEY_VERSION, CONTENT_VERSION)
+            .putStringSet(KEY_FILES, seeded)
+            .apply()
     }
 
     private suspend fun seedFromJson(root: JSONObject) {
@@ -131,5 +191,8 @@ class ContentSeeder(
          */
         const val CONTENT_VERSION = "13"
         const val KEY_VERSION = "content_version"
+
+        /** File names already seeded, so they are not read and parsed again on later launches. */
+        const val KEY_FILES = "seeded_files"
     }
 }

@@ -11,7 +11,7 @@
     "difficulty": "Easy and flat through Durbar Square and the market lanes, then a real climb: 365 steep stone steps up Swayambhu hill with no shade. Take it slowly and carry water.",
     "bestTimeOfDay": "Start around 8:30 to 9am, so you reach Swayambhu before the midday haze and heat. Mornings are also when the Kumari sometimes appears at her window, and the light on the stupa's eyes is at its best.",
     "imageCredits": "Photographs are bundled from Wikimedia Commons under public domain or Creative Commons licences. Full attribution for each image appears on its stop page and in Settings.",
-    "heroImage": "photos/swayambhunath.jpg"
+    "heroImage": "photos/swayambhunath.webp"
   },
   "stops": [
     {
@@ -30,7 +30,7 @@
       "accessibility": "Step-free into the courtyard from the lane, but the surface is old brick and uneven. The upper floors are not open to visitors.",
       "insiderTip": "Come back during Indra Jatra in September if you can: the Kumari is paraded in a chariot right past this door, and the whole square turns into the biggest party of the Nepali year.",
       "nextStopDirections": "Leave the courtyard and walk north across the square, past the statue on the tall pillar, towards the palace wing with the Hanuman statue beside its gate. That is Hanuman Dhoka, about a minute away.",
-      "photoAsset": "photos/kumari-ghar.jpg",
+      "photoAsset": "photos/kumari-ghar.webp",
       "photoAttribution": "Photograph: Sundar1, CC BY-SA 3.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Kathmandu_Darbar0607_KumariGhar.JPG"
@@ -51,7 +51,7 @@
       "accessibility": "The museum courtyards involve steps, narrow doorways and uneven old stone. The nine-storey tower climb is steep ladders and not for everyone.",
       "insiderTip": "The Tribhuvan Museum section inside holds the king's thrones and crown jewels crowds walk straight past — slow down there, it is the quietest room in the palace.",
       "nextStopDirections": "Exit the palace gate and walk south-west across the square, past the tall Maju Dega temple on your right, towards the long low restored pavilion at the square's south-west corner. That is Kasthamandap, about two minutes away.",
-      "photoAsset": "photos/hanuman-dhoka.jpg",
+      "photoAsset": "photos/hanuman-dhoka.webp",
       "photoAttribution": "Photograph: Safalphotos, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 50,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Hanuman_Dhoka_Durbar_Square_Premises,_Kathmandu,_Nepal.jpg"
@@ -72,7 +72,7 @@
       "accessibility": "Level ground around the pavilion with some uneven old paving. The raised plinth has steps and no ramp.",
       "insiderTip": "Look for the Gorakhnath shrine inside the pavilion's ground floor — the ascetic god's image is why sadhus still gather here, and it is easy to miss behind the columns.",
       "nextStopDirections": "Walk north-east back towards the centre of the square, about fifty metres, to the tall triple-roofed Vishnu temple with the gilded doorway. That is Trailokya Mohan.",
-      "photoAsset": "photos/kasthamandap.jpg",
+      "photoAsset": "photos/kasthamandap.webp",
       "photoAttribution": "Photograph: Chainwit., CC BY 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Kasthamandap_Kathmandu_(2023).jpg"
@@ -93,7 +93,7 @@
       "accessibility": "Viewed from the level square. The temple plinth itself is stepped with no ramp.",
       "insiderTip": "Stand back at the Kasthamandap side at dusk: the gilded doorway catches the last light and the whole temple glows against the darkening brick.",
       "nextStopDirections": "Walk a few steps north to the biggest triple-roofed temple on the square, rising from a tall nine-stepped platform. That is Maju Dega, right beside you.",
-      "photoAsset": "photos/trailokya-mohan.jpg",
+      "photoAsset": "photos/trailokya-mohan.webp",
       "photoAttribution": "Photograph: Sumobie, CC BY 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 30,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Trailokya_Mohan_Narayan_Temple_at_Kathmandu_Durbar_Square.jpg"
@@ -114,7 +114,7 @@
       "accessibility": "The platform is nine steep stepped tiers with no handrail or ramp. The square around it is level but cobbled and uneven.",
       "insiderTip": "Climb only as high as feels safe — the upper tiers are steep with big drops and no rails. The third or fourth level already gives the full panorama.",
       "nextStopDirections": "Walk south out of the square, past the Kumari Ghar corner, and follow the lane downhill for about two minutes into the narrow street of old guesthouses and guitar shops. That is Freak Street, old Jhochhen.",
-      "photoAsset": "photos/maju-dega.jpg",
+      "photoAsset": "photos/maju-dega.webp",
       "photoAttribution": "Photograph: Jan Kranendonk, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Maju_Dega_Temple_in_Kathmandu.jpg"
@@ -135,7 +135,7 @@
       "accessibility": "A narrow lane with uneven paving and occasional motorbikes threading through. Step-free along its length but crowded.",
       "insiderTip": "The thangka painting shops here will unroll anything if you ask — even if you are not buying, watching a master explain the iconography is a free masterclass.",
       "nextStopDirections": "Head back north to the square's south edge, then walk north-west through the bazaar lanes for about five minutes, following signs for Indra Chowk. The big open market square with the temple on its platform is your next stop.",
-      "photoAsset": "photos/freak-street.jpg",
+      "photoAsset": "photos/freak-street.webp",
       "photoAttribution": "Photograph: Holynow, CC BY-SA 3.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Freak_street.jpg"
@@ -156,7 +156,7 @@
       "accessibility": "Flat but crowded, with uneven paving, open drains at the edges and motorbikes. Not easy with wheels; go slowly.",
       "insiderTip": "The bead and pote sellers on the north side will restring a broken necklace while you wait — a classic Indra Chowk errand that costs almost nothing.",
       "nextStopDirections": "Walk north out of the square along the main lane for about two minutes, following signs for Jana Bahal. Turn into the temple courtyard with the white shrine and the stone water spouts. That is the White Machhendranath temple.",
-      "photoAsset": "photos/indra-chowk.jpg",
+      "photoAsset": "photos/indra-chowk.webp",
       "photoAttribution": "Photograph: Maesi64, CC0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Akash_Bhairav_Temple_%E2%80%93_Kathmandu_%E2%80%93_01.jpg"
@@ -177,7 +177,7 @@
       "accessibility": "Level courtyard reached through an archway with a small step. The water-spout area can be wet and slippery.",
       "insiderTip": "If the chariot timbers are stored here, ask a local which month the Jatra falls this year — the date follows the lunar calendar and shifts annually.",
       "nextStopDirections": "Leave the courtyard and walk west along the Chhetrapati road for about twenty minutes, following signs for Swayambhu. Pass Chhetrapati Chowk, keep to the main road as it bends, and stop at the small tantric temple complex just before the hill rises. That is Bijeshwari.",
-      "photoAsset": "photos/jana-bahal.jpg",
+      "photoAsset": "photos/jana-bahal.webp",
       "photoAttribution": "Photograph: Rajesh Dhungana, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Seto_Machindranath_Temple_Kathmandu,_Nepal_Rajesh_Dhungana1.jpg"
@@ -198,7 +198,7 @@
       "accessibility": "Level compound with some steps at individual shrines. Fully step-free routes are limited.",
       "insiderTip": "The small shops on the lane outside sell the best pre-climb provisions: roasted peanuts, water, and kukri-shaped souvenirs you absolutely do not need.",
       "nextStopDirections": "Walk west to the base of the hill and find the great eastern stairway with the Buddha statues flanking its foot. Climb all 365 steps to the top — slowly, with rests at the landings. The stupa waits at the summit.",
-      "photoAsset": "photos/bijeshwari.jpg",
+      "photoAsset": "photos/bijeshwari.webp",
       "photoAttribution": "Photograph: Sangita21957, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Bijeshwari_Bajra_Yogini_Temple_Rajesh_Dhungana_Kathmandu_(1).jpg"
@@ -219,7 +219,7 @@
       "accessibility": "Not accessible: 365 steep stone steps with no lift, plus uneven paving and slopes at the summit. There is a longer vehicle road up the west side that avoids the steps but still involves slopes.",
       "insiderTip": "For sunset, arrive at least an hour early and claim an eastern-edge spot — the sun drops behind the hills and the whole stupa turns gold while the city lights come on below.",
       "nextStopDirections": "End of the walk. Descend by the same eastern stairway, or take the western vehicle road down for a gentler slope. Taxis wait near both bases for the ride back to Thamel or Durbar Square.",
-      "photoAsset": "photos/swayambhunath.jpg",
+      "photoAsset": "photos/swayambhunath.webp",
       "photoAttribution": "Photograph: Aritra360, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 70,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Swayambhunath_Stupa_Kathmandu.jpg"

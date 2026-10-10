@@ -110,8 +110,13 @@ sites and hides un-walked legs. So:
 ## 6. Photos: licensed, verified, respectful
 
 Wikimedia Commons only: public domain, CC BY or CC BY-SA. Never NC, never ND. Verify the license
-through the Commons API (`imageinfo`/`extmetadata`) BEFORE downloading, then take a ~1280–1600 px
-version and keep each file ≤ 600 KB. Record author, license and file-page URL in
+through the Commons API (`imageinfo`/`extmetadata`) BEFORE downloading, then download the best
+licensed version (at least 1080 px wide) and run `python3 tools/resize_photos.py --write`. The
+script normalizes every photo to the 1080 px width the app actually draws (see `AssetPhoto`),
+converts it to WebP, and rewrites the `"photos/..."` references in the tour JSONs — never
+hand-resize or hand-rename a photo, the script is the only thing that touches that directory.
+Normalized files land around 100–350 KB; nothing over ~600 KB should ever reach a commit, and
+re-running the script must report no changes. Record author, license and file-page URL in
 `photoAttribution`/`photoSourceUrl`, e.g. `Photograph: Diego Delso, CC BY-SA 4.0, via Wikimedia
 Commons`.
 

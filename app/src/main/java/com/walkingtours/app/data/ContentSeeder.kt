@@ -188,8 +188,10 @@ class ContentSeeder(
         /**
          * Bump whenever the bundled JSON changes, so an already-seeded device re-imports it. Not
          * the Room schema version — that is separate.
+         *
+         * 14: photographs moved from JPEG to WebP, so every photoAsset path changed.
          */
-        const val CONTENT_VERSION = "13"
+        const val CONTENT_VERSION = "14"
         const val KEY_VERSION = "content_version"
 
         /** File names already seeded, so they are not read and parsed again on later launches. */

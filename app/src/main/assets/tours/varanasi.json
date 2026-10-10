@@ -11,7 +11,7 @@
     "difficulty": "Moderate. Mostly flat walking along the ghat tops, but with many steep, uneven stone steps up and down between ghats and the old-city lanes. Ghat steps are not step-free and can be slippery near the water.",
     "bestTimeOfDay": "Start at dawn, around 5:30 to 6am at Assi, for the morning aarti, soft light and the ghats at their most alive. Time the middle of the walk for the temple and lunch, and be back at the river for the Dashashwamedh evening aarti at about 7pm — either linger along the way or rest midday and return. Winter mornings can be foggy, which is atmospheric but slow.",
     "imageCredits": "Photographs are bundled from Wikimedia Commons under public domain or Creative Commons licences. Full attribution for each image appears on its stop page and in Settings.",
-    "heroImage": "photos/dashashwamedh-ghat.jpg"
+    "heroImage": "photos/dashashwamedh-ghat.webp"
   },
   "stops": [
     {
@@ -30,7 +30,7 @@
       "accessibility": "Broad steps down to the water with no ramps and no handrails. The upper promenade is level but the steps themselves are steep and uneven.",
       "insiderTip": "Come before sunrise and claim a spot on the middle steps. The morning aarti faces east across the water, and the first light hits the priests' lamps before it hits anything else.",
       "nextStopDirections": "Walk north along the top of the ghats, keeping the river on your right, for about five minutes. The next stop is the quieter ghat with the large peepal tree and the small shrines, just past the bend.",
-      "photoAsset": "photos/assi-ghat.jpg",
+      "photoAsset": "photos/assi-ghat.webp",
       "photoAttribution": "Photograph: Vijendra319, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Assi_Ghat_Varanasi.jpg"
@@ -51,7 +51,7 @@
       "accessibility": "Steep stone steps with no ramps. The lanes behind the ghat are narrow and uneven.",
       "insiderTip": "Glance at the painted tiles and wall shrines as you pass — the Ramlila scenes painted around these lanes are touched up every autumn before the festival season.",
       "nextStopDirections": "Continue north along the ghat-top path for about ten to twelve minutes, passing Bhadaini and Janaki ghats. The next stop is the ghat with the tall crematorium building and the big open burning terraces on your right.",
-      "photoAsset": "photos/tulsi-ghat.jpg",
+      "photoAsset": "photos/tulsi-ghat.webp",
       "photoAttribution": "Photograph: Nandanupadhyay, CC BY-SA 3.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Tulsi_Ghat.jpg"
@@ -72,7 +72,7 @@
       "accessibility": "Steep steps with no ramps. Stay on the upper terrace if the lower steps feel unsteady — the view and the lesson are the same.",
       "insiderTip": "The tall chimneyed building is the electric crematorium — many local families use it, and its presence is a reminder that this is a working civic facility, not a spectacle.",
       "nextStopDirections": "Walk north along the steps for just two to three minutes. The next stop is the colourful red-and-white striped temple rising directly over the river, almost next door.",
-      "photoAsset": "photos/harishchandra-ghat.jpg",
+      "photoAsset": "photos/harishchandra-ghat.webp",
       "photoAttribution": "Photograph: Vrinda, CC BY-SA 3.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Harishchandra_Ghat,_Varanasi.JPG"
@@ -93,7 +93,7 @@
       "accessibility": "Steep steps with no ramps. The temple platform above the steps is level once you climb up.",
       "insiderTip": "Step into the lane just behind the temple for chai — the stalls here serve pilgrims, not tourists, so it is cheap, strong and fast.",
       "nextStopDirections": "Continue north along the ghats for about ten minutes, passing Narad, Raja and Munshi ghats. Follow the river bend — the next stop is the grand, wide ghat with the rows of umbrellas and the big evening stage, which you cannot miss.",
-      "photoAsset": "photos/kedar-ghat.jpg",
+      "photoAsset": "photos/kedar-ghat.webp",
       "photoAttribution": "Photograph: J Duval, CC BY 2.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Kedar_Ghat_on_the_Ganges,_Varanasi.jpg"
@@ -114,7 +114,7 @@
       "accessibility": "Wide, relatively even steps by ghat standards, but still no ramps and no handrails. The crowds at aarti time are dense; arrive early for a stable spot on the upper steps.",
       "insiderTip": "The steps beat the boats. Boats drift, jostle and charge surge prices — a high step near the centre gives you the full synchronised-lamp view for free.",
       "nextStopDirections": "Leave the ghat by the main steps up to the street and walk inland, away from the river, for about eight minutes through the lanes. The next stop is the temple with the golden towers at the end of the new corridor — follow the signs for Shri Kashi Vishwanath Dham.",
-      "photoAsset": "photos/dashashwamedh-ghat.jpg",
+      "photoAsset": "photos/dashashwamedh-ghat.webp",
       "photoAttribution": "Photograph: Sujay25, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 50,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Ganga_Aarti_in_evening_at_Dashashwamedh_ghat,_Varanasi.jpg"
@@ -135,7 +135,7 @@
       "accessibility": "The new corridor is wide, paved and mostly level — the easiest walking on this tour. The temple sanctum itself involves crowds, queuing and steps, and is difficult for anyone with limited mobility.",
       "insiderTip": "Do not carry your phone to the gate and hope for the best — leave it at your hotel or use the lockers first. The frisking queues move slowly and rejoining them costs you an hour.",
       "nextStopDirections": "Walk back out to the lanes west of the temple and turn into the narrow bazaar lane heading towards Godowlia. The next stop is the food strip a few minutes' walk away — follow the smell of frying ghee.",
-      "photoAsset": "photos/kashi-vishwanath-corridor.jpg",
+      "photoAsset": "photos/kashi-vishwanath-corridor.webp",
       "photoAttribution": "Photograph: Gannu03, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 60,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Shri_Kashi_Vishwanath_Temple_7.jpg"
@@ -156,7 +156,7 @@
       "accessibility": "Narrow, crowded, uneven lanes with no seating in most stalls. Expect to stand or perch on steps; the ground can be greasy near fry stalls.",
       "insiderTip": "Ask for the kulhad — the clay cup — for your lassi, and eat the malai topping with a spoon first. The malaiyyo, if it is winter, sells out by mid-morning, so go early.",
       "nextStopDirections": "Head back east towards the river through the lanes, about five minutes downhill. The next stop is the riverside terrace above the cremation ghat — follow the signs for Manikarnika and stay on the upper path.",
-      "photoAsset": "photos/vishwanath-food-lanes.jpg",
+      "photoAsset": "photos/vishwanath-food-lanes.webp",
       "photoAttribution": "Photograph: Adam Jones, CC BY-SA 2.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:World%27s_Best_Lassi_-_Blue_Lassi_-_Old_City_-_Varanasi_-_Uttar_Pradesh_-_India_%2812498958194%29.jpg"
@@ -177,7 +177,7 @@
       "accessibility": "The viewpoint is on the upper riverside path with steps nearby and no ramps. Do not attempt the lower burning terraces, which are uneven, crowded and inappropriate for visitors to enter.",
       "insiderTip": "Put the camera away entirely at this stop — not just the shutter, the visible camera. The kindest thing you can do here is be obviously, deliberately not photographing.",
       "nextStopDirections": "Continue north along the riverside path for about three minutes, past Lalita Ghat. The next stop is the ghat with the half-sunken temple leaning in the shallows, just ahead.",
-      "photoAsset": "photos/manikarnika-viewpoint.jpg",
+      "photoAsset": "photos/manikarnika-viewpoint.webp",
       "photoAttribution": "Photograph: Gannu03, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Manikarnika_Ghat_3.jpg"
@@ -198,7 +198,7 @@
       "accessibility": "Steep, uneven steps with no ramps. The sunken temple area itself is partly collapsed — admire it from the stable upper steps.",
       "insiderTip": "Look south from the top steps at dusk: the full crescent of lighted ghats is the best panoramic photograph of the walk, and nobody crowds this end.",
       "nextStopDirections": "End of the walk. Climb to the lane behind the ghat and follow it south back towards Godowlia for rickshaws and taxis, or stroll the ghat-top path back towards Dashashwamedh for the evening aarti boats.",
-      "photoAsset": "photos/scindia-ghat.jpg",
+      "photoAsset": "photos/scindia-ghat.webp",
       "photoAttribution": "Photograph: travelwayoflife, CC BY-SA 2.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Scindia_Ghat_in_morning,_Varanasi,_Uttar_Pradesh,_India_(2012).jpg"

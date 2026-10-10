@@ -11,7 +11,7 @@
     "difficulty": "Easy to moderate. Flat cobbled lanes in the Old City, the steep hill is ridden via funicular, then a gentle downhill walk to the boulevard. The Maiden Tower's internal stairs are steep and narrow; the Old City underfoot is cobbles and worn stone.",
     "bestTimeOfDay": "Start early afternoon, around 1 to 2pm, so the museums are open and you reach the hilltop for late golden light. Time the viewpoint for the hour before sunset, and finish on the boulevard as the Flame Towers switch on their LED flames after dark. Mornings work too, but the light over the bay is an evening show.",
     "imageCredits": "Photographs are bundled from Wikimedia Commons under public domain or Creative Commons licences. Full attribution for each image appears on its stop page and in Settings.",
-    "heroImage": "photos/maiden-tower.jpg"
+    "heroImage": "photos/maiden-tower.webp"
   },
   "stops": [
     {
@@ -30,7 +30,7 @@
       "accessibility": "Not accessible, honestly: steep narrow stone stairs between all eight floors, low doorways, uneven steps. The plaza around the base is level cobbles.",
       "insiderTip": "Climb slowly and look at the masonry as you go — you can see where the 12th-century builders joined older stonework. At the top, find the sea-facing fin: that strange rib is the tower's great unsolved mystery.",
       "nextStopDirections": "Leave the tower plaza and walk about sixty metres north up the lane, into the small stone courtyard with the big carved portal. That is the Bukhara Caravanserai, our next stop.",
-      "photoAsset": "photos/maiden-tower.jpg",
+      "photoAsset": "photos/maiden-tower.webp",
       "photoAttribution": "Photograph: Diego Delso, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 40,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Torre_de_la_Doncella,_Baku,_Azerbaiy%C3%A1n,_2016-09-26,_DD_08.jpg"
@@ -51,7 +51,7 @@
       "accessibility": "One step through the portal, then a level courtyard. The upper cells are not open to visitors.",
       "insiderTip": "Look up at the portal's carved frame before you go in — the stone muqarnas carving over the door is the building's finest original detail, and everyone photographs the courtyard instead.",
       "nextStopDirections": "Leave the courtyard, turn left and walk south-west through the lanes for about two hundred metres, downhill toward the minaret you can see over the rooftops. The Juma Mosque is ahead of you.",
-      "photoAsset": "photos/bukhara-caravanserai.jpg",
+      "photoAsset": "photos/bukhara-caravanserai.webp",
       "photoAttribution": "Photograph: Interfase, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 30,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Bukhara_Caravanserai_(Baku).JPG"
@@ -72,7 +72,7 @@
       "accessibility": "A step or two at the entrance. Shoes are removed inside, so the floor is carpeted and level.",
       "insiderTip": "Find the 1437 inscription band on the minaret — Kufic-style carving, easy to miss from the courtyard. It is the oldest dated thing on this stop by four and a half centuries.",
       "nextStopDirections": "Leave the mosque and walk north-west uphill through the lanes for about two hundred and fifty metres, following the signs for the palace complex. The big ceremonial portal ahead is the Palace of the Shirvanshahs.",
-      "photoAsset": "photos/juma-mosque.jpg",
+      "photoAsset": "photos/juma-mosque.webp",
       "photoAttribution": "Photograph: Diego Delso, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 35,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Mezquita_del_Viernes,_Baku,_Azerbaiy%C3%A1n,_2016-09-26,_DD_33.jpg"
@@ -93,7 +93,7 @@
       "accessibility": "Mixed: courtyards are cobbled with steps between levels, and several pavilions have stairs. The main courtyard is manageable; the full circuit is not step-free.",
       "insiderTip": "The Divankhana rotunda photographs best in slanting afternoon light, when the carving throws deep shadows. And ask the attendants which pavilion is closed — there is almost always one, and it is never the one you expected.",
       "nextStopDirections": "Leave the palace complex and walk about fifty metres to the small museum house beside it — the Museum of Miniature Books, our next stop, is right next door.",
-      "photoAsset": "photos/shirvanshahs-palace.jpg",
+      "photoAsset": "photos/shirvanshahs-palace.webp",
       "photoAttribution": "Photograph: Diego Delso, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 60,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Palacio_de_los_Shirvanshah,_Baku,_Azerbaiy%C3%A1n,_2016-09-26,_DD_183-185_HDR.jpg"
@@ -114,7 +114,7 @@
       "accessibility": "Small interior with tight display rooms; mostly level but cramped. The entrance has a step or two.",
       "insiderTip": "Ask to use a magnifying glass and hunt the tiniest book in the building — then check the case labels for which country sent the newest arrival. The collection spans more than seventy countries.",
       "nextStopDirections": "Leave the museum and walk north-east through the lanes for about four hundred metres toward the old walls. Exit the Old City through the great double gate in the fortifications — the Shamakhi Gate, our next stop.",
-      "photoAsset": "photos/miniature-book-museum.jpg",
+      "photoAsset": "photos/miniature-book-museum.webp",
       "photoAttribution": "Photograph: Stanislav Kozlovskiy, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 30,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Baku_museum_of_miniature_books_02.jpg"
@@ -135,7 +135,7 @@
       "accessibility": "Level passage through the arch. The surrounding pavements are uneven in places.",
       "insiderTip": "Photograph the gate from outside looking back in: the twin towers frame the Old City lanes perfectly, and late afternoon light hits the stone face-on.",
       "nextStopDirections": "Walk north out of the gate for about two hundred metres toward the sound of water and café chatter. Fountain Square opens up in front of you — head for the fountains in the middle.",
-      "photoAsset": "photos/shamakhi-gate.jpg",
+      "photoAsset": "photos/shamakhi-gate.webp",
       "photoAttribution": "Photograph: Самый древний, Public domain, via Wikimedia Commons",
       "triggerRadiusMeters": 30,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Walls_of_the_fortress_of_the_Baku_Old_City_(Azerbaijan)_-_10-12centuries6.jpg"
@@ -156,7 +156,7 @@
       "accessibility": "Level paved square, step-free throughout. Benches everywhere.",
       "insiderTip": "The Literature Museum facade statues read like a hall of fame of Azerbaijani poetry — find Nizami, the 12th-century epic poet the museum is named for. Evening, when the fountains are lit, is the square at its best.",
       "nextStopDirections": "Walk south from the square for about fifteen minutes, downhill through the streets toward the bay, to the funicular lower station. Buy a ticket (about 1 ₼) and ride the little car to the top. If the funicular is closed for maintenance, take a taxi to Highland Park instead — do not attempt the steep road on foot in the heat.",
-      "photoAsset": "photos/fountain-square.jpg",
+      "photoAsset": "photos/fountain-square.webp",
       "photoAttribution": "Photograph: Bernard Gagnon, CC BY 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 60,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Fountains_Square,_Baku_01.jpg"
@@ -177,7 +177,7 @@
       "accessibility": "The funicular cars and the main terrace are step-manageable, but the park paths slope and gusty wind can unbalance. Take it slow on the ridge path.",
       "insiderTip": "The twenty minutes before sunset are magic: the Old City glows honey-gold and the bay turns silver. After dark, stay a few minutes more — the Flame Towers' LED show starts and the boulevard lights string the whole bay.",
       "nextStopDirections": "Walk south along the ridge path for about two hundred metres, past the Flame Towers, to the rows of glowing graves around the eternal flame. That is Martyrs' Alley — please go quietly.",
-      "photoAsset": "photos/highland-park-viewpoint.jpg",
+      "photoAsset": "photos/highland-park-viewpoint.webp",
       "photoAttribution": "Photograph: Diego Delso, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 50,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Vista_de_Baku,_Azerbaiy%C3%A1n,_2016-09-26,_DD_101-106_PAN.jpg"
@@ -198,7 +198,7 @@
       "accessibility": "Level avenue along the ridge, step-free in the main memorial area. The descent stairs to the boulevard have many steps — take the path slowly.",
       "insiderTip": "Read a few of the portrait plaques as you walk — ages, professions, families. The stones stop being a monument and start being neighbours. Then look up: the eternal flame with the bay behind it is the shot.",
       "nextStopDirections": "Take the stairs and paths down the east side of the hill toward the water for about ten minutes, emerging on the seafront promenade by the rolled-carpet building. That is the Carpet Museum end of Baku Boulevard — our final stop.",
-      "photoAsset": "photos/martyrs-alley.jpg",
+      "photoAsset": "photos/martyrs-alley.webp",
       "photoAttribution": "Photograph: shankar s., CC BY 2.0, via Wikimedia Commons",
       "triggerRadiusMeters": 50,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:A_long_walk_to_the_cenotaph_housing_the_eternal_flame_(36234094154).jpg"
@@ -219,7 +219,7 @@
       "accessibility": "Flat, wide, paved promenade — the most accessible stop on the tour. Benches throughout.",
       "insiderTip": "Walk five minutes further along to Little Venice for the canals and bridges, and look back at the Flame Towers after full dark — the LED flame show is the city's goodnight.",
       "nextStopDirections": "End of the walk. Stroll either direction along the promenade — cafés, tea vendors, and taxis line the boulevard. The city centre and Fountain Square are a short taxi or a twenty-minute stroll back north.",
-      "photoAsset": "photos/baku-boulevard.jpg",
+      "photoAsset": "photos/baku-boulevard.webp",
       "photoAttribution": "Photograph: Antoloji, CC BY-SA 4.0, via Wikimedia Commons",
       "triggerRadiusMeters": 60,
       "photoSourceUrl": "https://commons.wikimedia.org/wiki/File:Baku_Boulevard_Park.jpg"

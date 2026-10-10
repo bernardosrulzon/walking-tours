@@ -53,7 +53,7 @@ data class AiSettingsState(
      * introduction when the tour starts, stops on geofence arrival. When false, chapters only
      * start when the user presses play.
      */
-    val autoPlayChapters: Boolean = true,
+    val autoPlayChapters: Boolean = false,
     /** BCP 47 tag for the narration language: "en-US" or "pt-BR". */
     val narrationLanguage: String = NARRATION_LANGUAGE,
     /** Appearance: "system", "light" or "dark". */
@@ -92,7 +92,7 @@ class AiSettings(context: Context) {
                 .takeIf { it in GEMINI_TTS_VOICES } ?: DEFAULT_CLOUD_VOICE,
             geminiApiKey = prefs.getString(KEY_GEMINI_KEY, null) ?: buildGemini,
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
-            autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, true),
+            autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, false),
             narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
                 .takeIf { it in NARRATION_LANGUAGES.map { (tag, _) -> tag } } ?: NARRATION_LANGUAGE,
             themeMode = (prefs.getString(KEY_THEME_MODE, null) ?: THEME_MODE_SYSTEM)

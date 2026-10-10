@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -495,12 +496,16 @@ private fun MessageBubble(message: ChatMessage) {
             // a two-word reply look like a full-width banner.
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = content,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            )
+            // Long-press to select and copy an answer. Each bubble is its own selection scope so a
+            // drag can't run away across the scrolling list.
+            SelectionContainer {
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = content,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }

@@ -11,8 +11,16 @@ import android.widget.FrameLayout
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Satellite
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -24,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
@@ -55,6 +64,7 @@ import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapEffect
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker as GoogleMarker
 import com.google.maps.android.compose.Polyline as GooglePolyline
@@ -68,9 +78,11 @@ import com.walkingtours.app.maps.DirectionsClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.osmdroid.tileprovider.MapTileProviderBasic
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -362,6 +374,65 @@ private class GestureClaimingMapView(context: Context, options: GoogleMapOptions
 }
 
 /**
+ * Whether the maps are showing satellite imagery rather than the street map.
+ *
+ * One flag for the whole process, not a persisted setting: it is view state, and a walker starts on
+ * the street map every launch. Every map reads it, so a switch made on the tour page holds on the
+ * stop pages too, and the toggle below is the only writer.
+ */
+private val satelliteImagery = mutableStateOf(false)
+
+/**
+ * Esri's World Imagery: the satellite layer for the OpenStreetMap engine.
+ *
+ * osmdroid ships no global satellite source — its only one, USGS, covers the United States — so the
+ * keyless engine borrows Esri's public imagery endpoint, the one open-source map stacks commonly
+ * use. The URL scheme is z/y/x rather than the z/x/y of osmdroid's own tile sources, which is why
+ * this cannot be a plain `XYTileSource`; the notice is shown on the map the way OpenStreetMap's is.
+ */
+private object EsriWorldImagery : OnlineTileSourceBase(
+    "Esri World Imagery",
+    1,
+    19,
+    256,
+    ".jpg",
+    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"),
+    "Powered by Esri, Maxar, Earthstar Geographics",
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String =
+        baseUrl +
+            MapTileIndex.getZoom(pMapTileIndex) + "/" +
+            MapTileIndex.getY(pMapTileIndex) + "/" +
+            MapTileIndex.getX(pMapTileIndex)
+}
+
+/**
+ * The map/satellite switch, floating over the map's top-right corner.
+ *
+ * The icon shows the layer it would switch to — a satellite while the street map is up, a map while
+ * the imagery is — so the button always says what the next tap does. Both engines honour the shared
+ * choice; see [satelliteImagery].
+ */
+@Composable
+private fun MapStyleToggle(modifier: Modifier = Modifier) {
+    val satellite = satelliteImagery.value
+    FilledIconButton(
+        onClick = { satelliteImagery.value = !satellite },
+        modifier = modifier.size(36.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Icon(
+            imageVector = if (satellite) Icons.Filled.Map else Icons.Filled.Satellite,
+            contentDescription = if (satellite) "Show street map" else "Show satellite imagery",
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
  * The itinerary map.
  *
  * Which engine draws it is decided at build time, not at runtime. With no Google Maps key compiled
@@ -459,19 +530,24 @@ fun TourMap(
         WalkingToursApp.modernMapsRendererAvailable
     ) {
         Log.i(TAG, "Map: Google Maps (key present, modern renderer loaded)")
-        GoogleTourMap(
-            stops = stops,
-            modifier = modifier,
-            visitedIds = visitedIds,
-            userLat = userLat,
-            userLng = userLng,
-            focusStops = focusStops,
-            geofenceStop = geofenceStop,
-            userHeading = userHeading,
-            userAccuracyMeters = userAccuracyMeters,
-            selectedStopId = selectedStopId,
-            onStopClick = onStopClick,
-        )
+        Box(modifier.clipToBounds()) {
+            GoogleTourMap(
+                stops = stops,
+                modifier = Modifier.fillMaxSize(),
+                visitedIds = visitedIds,
+                userLat = userLat,
+                userLng = userLng,
+                focusStops = focusStops,
+                geofenceStop = geofenceStop,
+                userHeading = userHeading,
+                userAccuracyMeters = userAccuracyMeters,
+                selectedStopId = selectedStopId,
+                onStopClick = onStopClick,
+            )
+            MapStyleToggle(
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            )
+        }
         return
     }
     Log.i(
@@ -513,6 +589,16 @@ fun TourMap(
             // below; this is only so that nothing can ever catch the default.
             controller.setZoom(initialZoomFor(framedStops))
             framedStops.midpoint()?.let { (lat, lng) -> controller.setCenter(GeoPoint(lat, lng)) }
+        }
+    }
+
+    // The basemap follows the shared map/satellite choice. Changing the source keeps the camera, and
+    // the enlarged tile cache serves whichever layer has been seen before, so flipping back and
+    // forth is instant.
+    LaunchedEffect(Unit) {
+        snapshotFlow { satelliteImagery.value }.collect { satellite ->
+            mapView.setTileSource(if (satellite) EsriWorldImagery else TileSourceFactory.MAPNIK)
+            mapView.invalidate()
         }
     }
 
@@ -814,24 +900,29 @@ fun TourMap(
         }
     }
 
-    AndroidView(
-        factory = { ctx ->
-            MapTouchGuard(ctx).apply {
-                // Defensive: a recycled AndroidView can hand back a MapView that is still attached.
-                (mapView.parent as? ViewGroup)?.removeView(mapView)
-                addView(
-                    mapView,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-            }
-        },
-        modifier = modifier
-            .clipToBounds()
-            .onSizeChanged { fitToViewport(it) },
-    )
+    Box(modifier.clipToBounds()) {
+        AndroidView(
+            factory = { ctx ->
+                MapTouchGuard(ctx).apply {
+                    // Defensive: a recycled AndroidView can hand back a MapView that is still attached.
+                    (mapView.parent as? ViewGroup)?.removeView(mapView)
+                    addView(
+                        mapView,
+                        FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                }
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { fitToViewport(it) },
+        )
+        MapStyleToggle(
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+        )
+    }
 }
 
 /**
@@ -1097,12 +1188,21 @@ private fun GoogleTourMap(
     // dark phone cannot drag a light app's map with it.
     val mapColorScheme = rememberMapColorScheme()
 
+    // The layer follows the shared map/satellite choice. HYBRID rather than SATELLITE: the imagery
+    // with its street and place labels, which is the "satellite" view map apps actually show and
+    // the only one a walker can orient themselves on.
+    val googleMapType = if (satelliteImagery.value) MapType.HYBRID else MapType.NORMAL
+
     GoogleMap(
         modifier = modifier
             .clipToBounds()
             .onSizeChanged { fitToViewport(it) }
             .graphicsLayer { alpha = if (mapReady) 1f else 0f },
         cameraPositionState = cameraPositionState,
+        // The layer goes into the properties as well as the creation options: a toggle applies to
+        // the live map object through the properties, while a map created after a choice was made
+        // must not paint one frame of the other layer first.
+        properties = MapProperties(mapType = googleMapType),
         // The camera goes into the options as well as the state. A map created without one opens on
         // Google's own default — the whole planet at (0, 0) — and paints it for as long as it takes
         // the camera to arrive. Given it here, the very first frame the SDK draws is already the
@@ -1113,6 +1213,7 @@ private fun GoogleTourMap(
                 // The scheme goes into the options as well as the effect below: a map created
                 // with FOLLOW_SYSTEM would paint one dark frame before the effect corrects it.
                 mapColorScheme(mapColorScheme)
+                mapType(googleMapType.value)
             }
         },
         // osmdroid's zoom buttons are hidden and the app draws its own position dot, so Google's

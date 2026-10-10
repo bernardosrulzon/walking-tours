@@ -87,6 +87,10 @@ so a human can judge. Rules:
   a bar with the terrace's name.
 - `triggerRadiusMeters` 30–80 by site size: tight on linear ghats and lanes, wide on parks and
   waterfronts.
+- Use reverse geocoding (Geocoding API v4 `GET geocode.googleapis.com/v4/geocode/location/{lat},{lng}`,
+  same key + Android headers) if needed to sanity-check a pin: the returned address / district must
+  match the stop's city and neighbourhood. If it doesn't, re-query Places or keep the curated point
+  and document why.
 
 ## 5. Distances must survive Google Maps
 

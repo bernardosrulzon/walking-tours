@@ -1,7 +1,6 @@
 package com.walkingtours.app.ai
 
 import android.util.Log
-import com.walkingtours.app.audio.NarrationEngine
 import com.walkingtours.app.data.TourRepository
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.data.db.TourEntity
@@ -49,7 +48,6 @@ class TravelChatController(
     private val repository: TourRepository,
     private val geminiClient: GeminiClient,
     private val settings: AiSettings,
-    private val narration: NarrationEngine,
     private val guide: GuideController,
 ) {
 
@@ -127,7 +125,6 @@ class TravelChatController(
                     images = listOfNotNull(image),
                 )
                 append(key, ChatMessage(ChatRole.ASSISTANT, answer))
-                if (settings.current.speakAiAnswers) speak(answer)
             } catch (e: AiException) {
                 append(key, ChatMessage(ChatRole.ASSISTANT, e.message ?: "Something went wrong.", isError = true))
             } catch (e: Exception) {
@@ -152,13 +149,6 @@ class TravelChatController(
         _state.value = _state.value.copy(needsApiKey = !settings.current.hasGeminiKey)
     }
 
-    /** Read an answer aloud through the same voice as the tour. */
-    fun speak(text: String) {
-        narration.stop()
-        narration.play(CHAT_UTTERANCE_ID, text)
-    }
-
-    fun stopSpeaking() = narration.stop()
 
     private fun append(key: String, message: ChatMessage) {
         val list = conversations.getOrPut(key) { mutableListOf() }
@@ -258,7 +248,6 @@ class TravelChatController(
 
     private companion object {
         const val TAG = "TravelChat"
-        const val CHAT_UTTERANCE_ID = "__chat__"
         const val MISSING_KEY_MESSAGE =
             "I need a Gemini API key before I can answer questions. Add one in Settings, and I will " +
                 "be able to help with anything about this walk or the city."

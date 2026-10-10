@@ -244,25 +244,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Read answers aloud", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                text = "Uses the same voice as the tour narration.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = state.speakAiAnswers,
-                            onCheckedChange = { on -> settings.update { it.copy(speakAiAnswers = on) } },
-                        )
-                    }
 
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(

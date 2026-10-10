@@ -48,7 +48,6 @@ data class AiSettingsState(
     val geminiApiKey: String = "",
     /** Blank means "discover the best available model at runtime". */
     val geminiModel: String = "",
-    val speakAiAnswers: Boolean = false,
     /** Read AI answers aloud through the same narration engine as the tour. */
     val narrationRate: Float = 1.0f,
     /**
@@ -95,7 +94,6 @@ class AiSettings(context: Context) {
                 .takeIf { it in GEMINI_TTS_VOICES } ?: DEFAULT_CLOUD_VOICE,
             geminiApiKey = prefs.getString(KEY_GEMINI_KEY, null) ?: buildGemini,
             geminiModel = prefs.getString(KEY_GEMINI_MODEL, "") ?: "",
-            speakAiAnswers = prefs.getBoolean(KEY_SPEAK_ANSWERS, false),
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
             autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, true),
             narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
@@ -113,7 +111,6 @@ class AiSettings(context: Context) {
             .putString(KEY_VOICE, next.cloudVoiceName)
             .putString(KEY_GEMINI_KEY, next.geminiApiKey)
             .putString(KEY_GEMINI_MODEL, next.geminiModel)
-            .putBoolean(KEY_SPEAK_ANSWERS, next.speakAiAnswers)
             .putFloat(KEY_RATE, next.narrationRate)
             .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
             .putString(KEY_NARRATION_LANGUAGE, next.narrationLanguage)
@@ -126,7 +123,6 @@ class AiSettings(context: Context) {
         const val KEY_VOICE = "cloud_voice_name"
         const val KEY_GEMINI_KEY = "gemini_api_key"
         const val KEY_GEMINI_MODEL = "gemini_model"
-        const val KEY_SPEAK_ANSWERS = "speak_ai_answers"
         const val KEY_RATE = "narration_rate"
         const val KEY_AUTO_PLAY = "auto_play_chapters"
         const val KEY_NARRATION_LANGUAGE = "narration_language"

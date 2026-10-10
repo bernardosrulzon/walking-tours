@@ -89,6 +89,6 @@ object ServiceLocator {
     }
 
     val chat: TravelChatController by lazy {
-        TravelChatController(repository, geminiClient, aiSettings, narrationEngine, guide)
+        TravelChatController(repository, geminiClient, aiSettings, guide)
     }
 }

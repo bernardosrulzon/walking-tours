@@ -947,8 +947,9 @@ private fun rememberMapColorScheme(): Int {
  * icon helper, the same blue dot with its heading cone, and the same one-time fit of one leg rather
  * than the whole route on a stop page. The difference is the line: when the key can use the Routes
  * API the whole route — or, on a stop page, the current-to-next leg — is the walk a person would
- * actually take, and until that arrives — or forever, if it never does — it is straight hops between
- * the stops being framed, which is the same line the osmdroid map draws.
+ * actually take, and it is drawn only once it is ready; an answer with no route (no key permission,
+ * offline) falls back to straight hops between the stops being framed, the same line the osmdroid
+ * map draws.
  */
 @Composable
 @OptIn(com.google.maps.android.compose.MapsComposeExperimentalApi::class)
@@ -1015,17 +1016,16 @@ private fun GoogleTourMap(
         mapReady = true
     }
 
-    // Straight hops, shown until the real route arrives and left in place if it never does. A
-    // straight line between stops is a poor route but a much better map than no line at all.
+    // Straight hops, drawn only once the Routes API has answered — and answered "no route". They
+    // used to be drawn while the fetch was in flight, which flashed a wrong line that then snapped
+    // to the real one; a moment with no line is what the walker sees instead.
     val directPoints = remember(routeKey) { framedStops.map { LatLng(it.lat, it.lng) } }
-    /** The real walking line, empty until the Routes API answers. */
-    var routePoints by remember(routeKey) { mutableStateOf(emptyList<LatLng>()) }
+    /** The real walking line; null until the Routes API answers. */
+    var routePoints by remember(routeKey) { mutableStateOf<List<LatLng>?>(null) }
     LaunchedEffect(routeKey) {
-        if (framedStops.size < 2) {
-            routePoints = emptyList()
-            return@LaunchedEffect
-        }
-        routePoints = if (legStops != null) {
+        routePoints = if (framedStops.size < 2) {
+            emptyList()
+        } else if (legStops != null) {
             // One leg. Cached by the ordered pair, so flipping back and forth between stops asks the
             // Routes API once per process rather than once per visit.
             DirectionsClient.walkingLeg(context, framedStops.first(), framedStops.last())
@@ -1034,7 +1034,15 @@ private fun GoogleTourMap(
             DirectionsClient.walkingRoute(context, tourId, framedStops)
         }
     }
-    val linePoints = if (routePoints.size >= 2) routePoints else directPoints
+    // null — still fetching: nothing is drawn, so there is no flash of straight hops. An empty
+    // answer — no key, offline, refused — falls back to the straight hops, which is the map the
+    // walker would have had anyway.
+    val answer = routePoints
+    val linePoints = when {
+        answer == null -> emptyList()
+        answer.size >= 2 -> answer
+        else -> directPoints
+    }
 
     // Set the exact camera from the measured viewport, during layout.
     //

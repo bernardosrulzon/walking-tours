@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "10"
+const val NARRATION_PROMPT_VERSION = "11"
 
 fun guideSignature(
     guide: Guide?,
@@ -377,7 +377,8 @@ class GuideController(
             appendLine("This is the walker's introduction to the whole walk. Open by introducing yourself in")
             appendLine("the character and voice you are speaking in now, in your own words, and welcome them")
             appendLine("to ${tour?.city ?: "the city"}. Then set up the walk ahead the way you tell things, not")
-            appendLine("like a generic greeting.")
+            appendLine("like a generic greeting. Break the introduction into short paragraphs with a blank line")
+            appendLine("between each — an unbroken wall of text is the one thing the transcript must never be.")
         } else {
             appendLine()
             appendLine("Do not introduce yourself and do not greet the walker: the introduction already did")

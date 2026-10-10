@@ -253,7 +253,7 @@ class GuideController(
     }
 
     private suspend fun resolvedModel(): String =
-        model ?: geminiClient.resolveModel(settings.current.geminiModel).also { model = it }
+        model ?: geminiClient.resolveModel().also { model = it }
 
     private suspend fun requestGuides(
         tour: TourEntity,

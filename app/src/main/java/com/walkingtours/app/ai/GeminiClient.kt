@@ -55,11 +55,10 @@ class GeminiClient(
     }
 
     /**
-     * Picks the model to use: an explicit choice if one is set, otherwise the best text model the
-     * key can actually see.
+     * Picks the best text model the key can actually see. The model name is never pinned, so a
+     * retired id can never leave the app without an answer.
      */
-    suspend fun resolveModel(preferred: String): String {
-        if (preferred.isNotBlank()) return preferred
+    suspend fun resolveModel(): String {
         val available = runCatching { listModels() }
             .onFailure { Log.w(TAG, "Model discovery failed, using fallback", it) }
             .getOrDefault(emptyList())

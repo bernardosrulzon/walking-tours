@@ -115,7 +115,7 @@ class TravelChatController(
 
         scope.launch {
             try {
-                val model = resolvedModel ?: geminiClient.resolveModel(settings.current.geminiModel)
+                val model = resolvedModel ?: geminiClient.resolveModel()
                     .also { resolvedModel = it }
                 val answer = geminiClient.generate(
                     model = model,

@@ -112,4 +112,7 @@ dependencies {
     implementation(libs.osmdroid.android)
     implementation(libs.maps.compose)
     implementation(libs.androidx.fragment)
+    // Frosted-glass blur for the fixed action bar (dev.chrisbanes.haze).
+    implementation(libs.haze.core)
+    implementation(libs.haze.blur)
 }

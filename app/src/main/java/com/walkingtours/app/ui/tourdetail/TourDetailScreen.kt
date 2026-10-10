@@ -40,7 +40,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -67,6 +66,12 @@ import com.walkingtours.app.ui.components.SectionTitle
 import com.walkingtours.app.ui.components.TourMap
 import com.walkingtours.app.ui.detour.DetourTopicsSheet
 import com.walkingtours.app.util.Formatters
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 /**
  * Height of the overview map, and of the empty panel that holds its place until the tour loads.
@@ -172,14 +177,33 @@ fun TourDetailScreen(
         visited.isEmpty() -> "Start tour"
         else -> "Resume tour"
     }
+
+    // Frosted-glass action bar: the page scrolls under it, and Haze blurs whatever passes behind.
+    // Below Android 12 (no RenderEffect) the blur falls back to a near-opaque surface tint.
+    val hazeState = rememberHazeState()
+    val barTint = MaterialTheme.colorScheme.surface
+    val barStyle = HazeBlurStyle {
+        blurRadius(24.dp)
+        colorEffects(
+            listOf(HazeColorEffect.tint(barTint.copy(alpha = 0.72f))),
+        )
+        fallbackColorEffect(
+            HazeColorEffect.tint(barTint.copy(alpha = 0.94f)),
+        )
+    }
+
     Scaffold(
         bottomBar = {
             // Two fixed actions, thumb-sized: Ask opens the assistant sheet, Start begins or
             // resumes the walk. They live here rather than in the scrolling content so the
             // walker never has to scroll back up to set off.
-            Surface(
-                tonalElevation = 3.dp,
-                color = MaterialTheme.colorScheme.surface,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeBlur(
+                        input = HazeInput.Sources(hazeState),
+                        style = barStyle,
+                    ),
             ) {
                 Row(
                     modifier = Modifier
@@ -232,10 +256,14 @@ fun TourDetailScreen(
         // it scrolls off and built again on the way back, which costs a second of tiles and a
         // flash of nothing every time the walker looks down the stop list and up again.
         val scrollState = rememberScrollState()
+        // The page draws under the frosted action bar so the bar has something to blur. The bar's
+        // height comes back as trailing space at the bottom of this Column so the last stop can
+        // still scroll clear of it.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
+                .hazeSource(hazeState)
                 .verticalScroll(scrollState),
         ) {
             TourMap(
@@ -513,7 +541,8 @@ fun TourDetailScreen(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            // Clears the frosted bar that floats over the end of the page.
+            Spacer(Modifier.height(innerPadding.calculateBottomPadding() + 8.dp))
         }
     }
 }

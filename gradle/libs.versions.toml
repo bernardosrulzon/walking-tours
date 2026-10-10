@@ -11,6 +11,8 @@ navigation = "2.10.2"
 room = "2.8.5"
 osmdroid = "6.1.20"
 mapsCompose = "9.0.0"
+# Backdrop blur (frosted glass) for the fixed action bars. Built for Kotlin 2.4.x / Compose 1.12.
+haze = "2.0.1"
 
 # maps-compose pulls Fragment in transitively at an old resolution. Declaring it explicitly at a
 # current version both fixes the resolution and satisfies lint's InvalidFragmentVersionForActivityResult
@@ -40,6 +42,8 @@ osmdroid-android = { group = "org.osmdroid", name = "osmdroid-android", version.
 # Maps key was present at build time; the osmdroid map above remains the no-key path.
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
+haze-core = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
+haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

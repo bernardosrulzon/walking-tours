@@ -38,6 +38,7 @@ class HeadingProvider(private val context: Context) {
 
     private var running = false
     private var lastPublishMs = 0L
+    private var lastEmitMs = 0L
     private var lastEmitted: Float? = null
 
     /** Reported by the platform; gates whether the compass is trusted at all. */
@@ -151,6 +152,14 @@ class HeadingProvider(private val context: Context) {
         // invalidated sixty times a second to redraw an identical cone.
         val emitted = lastEmitted
         if (emitted == null || angularDelta(emitted, smoothed) >= MIN_CHANGE_DEGREES) {
+            // ...and at most every MIN_EMIT_INTERVAL_MS. A phone held still still jitters by more
+            // than a degree, so the change test alone lets through ten-odd updates a second — and
+            // every update recomposes whatever draws the cone. On the tour page that is the whole
+            // screen, measured on a Galaxy S23 at ~10 recompositions a second with the phone
+            // sitting on a table. The cone glides to each new value over HEADING_GLIDE_MS (700),
+            // far slower than this interval, so the slower feed is invisible.
+            if (emitted != null && now - lastEmitMs < MIN_EMIT_INTERVAL_MS) return
+            lastEmitMs = now
             lastEmitted = smoothed
             _headingDegrees.value = smoothed
         }
@@ -183,5 +192,8 @@ class HeadingProvider(private val context: Context) {
 
         /** Do not wake the map for a change smaller than this. */
         const val MIN_CHANGE_DEGREES = 1.0f
+
+        /** Do not wake it more often than this, however much the magnetometer jitters. */
+        const val MIN_EMIT_INTERVAL_MS = 200L
     }
 }

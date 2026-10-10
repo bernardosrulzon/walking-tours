@@ -1,10 +1,11 @@
 package com.walkingtours.app.ui.tourlist
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,16 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.ConfirmationNumber
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,7 +57,6 @@ import com.walkingtours.app.util.Formatters
 @Composable
 fun TourListScreen(
     onOpenTour: (String) -> Unit,
-    onOpenSettings: () -> Unit,
     /** When set, only this city's tours are listed and the top bar gets a back arrow. */
     city: String? = null,
     onBack: (() -> Unit)? = null,
@@ -94,14 +89,7 @@ fun TourListScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(city ?: "Walking Tours", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (city != null) "${tours.size} tour${if (tours.size == 1) "" else "s"}" else "AI-guided audio walks",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(city ?: "Walking Tours", fontWeight = FontWeight.SemiBold)
                 },
                 navigationIcon = {
                     if (onBack != null) {
@@ -113,11 +101,6 @@ fun TourListScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Voice and AI settings")
-                    }
-                },
             )
         },
     ) { innerPadding ->
@@ -165,26 +148,26 @@ fun TourListScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TourCard(tour: TourEntity, stopCount: Int, onClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Box(Modifier.fillMaxWidth().height(170.dp)) {
+        Box(Modifier.fillMaxWidth().height(180.dp)) {
             AssetPhoto(
                 assetPath = tour.heroImage,
                 contentDescription = "${tour.city} skyline",
-                modifier = Modifier.fillMaxWidth().height(170.dp),
+                modifier = Modifier.fillMaxWidth().height(180.dp),
             )
             // Scrim so the city name stays legible over a bright photograph.
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(170.dp)
+                    .height(180.dp)
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
                             0.55f to androidx.compose.ui.graphics.Color.Transparent,
@@ -202,12 +185,12 @@ private fun TourCard(tour: TourEntity, stopCount: Int, onClick: () -> Unit) {
                     Icons.Filled.Place,
                     contentDescription = null,
                     tint = androidx.compose.ui.graphics.Color.White,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = "${tour.city}, ${tour.country}",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     color = androidx.compose.ui.graphics.Color.White,
                     fontWeight = FontWeight.Medium,
                 )
@@ -220,27 +203,22 @@ private fun TourCard(tour: TourEntity, stopCount: Int, onClick: () -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = tour.summary,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Pill("$stopCount stops", icon = Icons.Filled.Place)
                 Pill("${tour.distanceKm} km", icon = Icons.AutoMirrored.Filled.DirectionsWalk)
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(Formatters.duration(tour.totalWalkMinutes) + " walking", icon = Icons.Filled.Schedule)
-                Pill("Audio guided", icon = Icons.Filled.ConfirmationNumber)
-            }
-            Spacer(Modifier.height(14.dp))
-            Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("View tour details")
             }
         }
     }

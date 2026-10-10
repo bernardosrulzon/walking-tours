@@ -1,23 +1,21 @@
 package com.walkingtours.app.ui.cities
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -105,22 +103,21 @@ fun CitiesScreen(
 
             items(cities.entries.toList(), key = { it.key }) { (city, cityTours) ->
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenCity(city) },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    onClick = { onOpenCity(city) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
-                    Box(Modifier.fillMaxWidth().height(170.dp)) {
+                    Box(Modifier.fillMaxWidth().height(180.dp)) {
                         AssetPhoto(
                             assetPath = cityTours.firstOrNull()?.heroImage,
                             contentDescription = "$city skyline",
-                            modifier = Modifier.fillMaxWidth().height(170.dp),
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
                         )
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .height(170.dp)
+                                .height(180.dp)
                                 .background(
                                     androidx.compose.ui.graphics.Brush.verticalGradient(
                                         0.55f to androidx.compose.ui.graphics.Color.Transparent,
@@ -134,40 +131,42 @@ fun CitiesScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                Icons.Filled.Place,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = city,
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium,
-                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = city,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                // Single-tour cities name the walk right here; multi-tour cities
+                                // list their walks one level down, so there is nothing to count.
+                                if (cityTours.size == 1) {
+                                    Text(
+                                        text = cityTours.first().title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White.copy(alpha = 0.88f),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(
+                                        Color.White.copy(alpha = 0.18f),
+                                        androidx.compose.foundation.shape.CircleShape,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Filled.ArrowForward,
+                                    contentDescription = "Open $city",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
-                    }
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = if (cityTours.size == 1) {
-                                "1 tour: ${cityTours.first().title}"
-                            } else {
-                                "${cityTours.size} tours"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Icon(
-                            Icons.Filled.ArrowForward,
-                            contentDescription = "Open $city",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
                     }
                 }
             }

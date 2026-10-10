@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ai.CloudVoice
 import com.walkingtours.app.ai.NARRATION_LANGUAGES
+import com.walkingtours.app.ai.THEME_MODES
 import kotlinx.coroutines.launch
 
 private const val TEST_PHRASE =
@@ -112,6 +113,27 @@ fun SettingsScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            // ---------------------------------------------------------- appearance
+            item {
+                SettingsCard(title = "Appearance") {
+                    Text(
+                        text = "Light is easiest outdoors; dark saves battery on late walks.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    THEME_MODES.forEach { (tag, label) ->
+                        LanguageRow(
+                            label = label,
+                            selected = state.themeMode == tag,
+                            onSelect = {
+                                settings.update { it.copy(themeMode = tag) }
+                            },
+                        )
+                    }
+                }
             }
 
             // ---------------------------------------------------------- narration voice
@@ -378,7 +400,8 @@ private fun SetupSteps() {
 private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
@@ -418,11 +441,11 @@ private fun StatusLine(text: String, isError: Boolean = false) {
 @Composable
 private fun LanguageRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            MaterialTheme.colorScheme.surfaceContainerHigh
         },
         onClick = onSelect,
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
@@ -452,11 +475,11 @@ private fun LanguageRow(label: String, selected: Boolean, onSelect: () -> Unit) 
 @Composable
 private fun VoiceRow(voice: CloudVoice, selected: Boolean, onSelect: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            MaterialTheme.colorScheme.surfaceContainerHigh
         },
         onClick = onSelect,
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),

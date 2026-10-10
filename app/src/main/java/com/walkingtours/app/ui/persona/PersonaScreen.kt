@@ -347,7 +347,7 @@ private fun GuideCard(guide: Guide, modifier: Modifier, onPick: (Guide) -> Unit)
         modifier = modifier.height(168.dp).clickable { onPick(guide) },
         // A quiet surface with a hairline edge, rather than a block of primary blue: the colour was
         // competing with the avatar and made the grid look washed out.
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
@@ -407,7 +407,7 @@ private fun GuideCardSkeleton(modifier: Modifier = Modifier) {
     )
     Card(
         modifier = modifier.height(168.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
@@ -418,7 +418,7 @@ private fun GuideCardSkeleton(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .size(40.dp)
                     .alpha(alpha)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(50)),
             )
             Spacer(Modifier.height(10.dp))
             SkeletonBar(widthFraction = 0.72f, height = 12.dp, alpha = alpha)
@@ -439,6 +439,6 @@ private fun SkeletonBar(widthFraction: Float, height: Dp, alpha: Float) {
             .fillMaxWidth(widthFraction)
             .height(height)
             .alpha(alpha)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(6.dp)),
     )
 }

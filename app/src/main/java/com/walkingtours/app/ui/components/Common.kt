@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,28 +24,65 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** Compact rounded label, e.g. "14 stops" or "2.8 km". Used instead of chips to keep styling simple. */
+/**
+ * Design tokens: one place for the spacing rhythm every screen shares, so cards, rows and
+ * sections line up instead of drifting by 2 dp per screen.
+ */
+object AppSpacing {
+    val screenHorizontal = 16.dp
+    val cardPadding = 16.dp
+    val sectionGap = 24.dp
+    val blockGap = 16.dp
+    val tightGap = 8.dp
+    val tagGap = 6.dp
+    val heroHeight = 180.dp
+}
+
+/**
+ * Informational panel: same shape language as the tappable cards, but a thin outline instead
+ * of a tonal fill, so a glance separates "tap me" (filled) from "read me" (outlined).
+ */
+@Composable
+fun InfoCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.material3.OutlinedCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant,
+        ),
+        colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        ),
+    ) {
+        content()
+    }
+}
 @Composable
 fun Pill(
     text: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    container: Color = MaterialTheme.colorScheme.surfaceVariant,
+    container: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Row(
         modifier = modifier
             .background(container, RoundedCornerShape(50))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
         }
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
             color = contentColor,
             maxLines = 1,
         )
@@ -58,7 +96,7 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier.padding(bottom = 8.dp),
+        modifier = modifier,
     )
 }
 
@@ -72,7 +110,7 @@ fun InfoRow(
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     if (value.isBlank()) return
-    Row(modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    Row(modifier = modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = null,
@@ -83,9 +121,10 @@ fun InfoRow(
         Column {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,

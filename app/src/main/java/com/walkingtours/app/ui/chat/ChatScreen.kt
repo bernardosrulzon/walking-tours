@@ -40,8 +40,6 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -101,7 +99,7 @@ fun AskBar(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(26.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 4.dp,
         modifier = modifier
             .fillMaxWidth()
@@ -379,23 +377,21 @@ private fun IntroHint() {
 
 @Composable
 private fun ApiKeyCard(onOpenSettings: () -> Unit) {
-    Card(
+    com.walkingtours.app.ui.components.InfoCard(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
                 text = "Add your Gemini API key",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 text = "The assistant needs a Google Gemini API key. It is free to create, and the " +
                     "free tier is generous for personal use. The tour itself keeps working without it.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
             TextButton(onClick = onOpenSettings) { Text("Open Settings") }
@@ -427,7 +423,7 @@ private fun SuggestionRow(
             suggestions.forEach { suggestion ->
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     // Deliberately not Surface's onClick overload: that enforces a 48dp minimum
                     // touch target, which is what kept these chips looking so far apart even after
                     // the padding was reduced. A plain clickable modifer lets them hug their text.
@@ -451,7 +447,7 @@ private fun MessageBubble(message: ChatMessage, onSpeak: () -> Unit) {
     val container = when {
         message.isError -> MaterialTheme.colorScheme.errorContainer
         isUser -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val content = when {
         message.isError -> MaterialTheme.colorScheme.onErrorContainer

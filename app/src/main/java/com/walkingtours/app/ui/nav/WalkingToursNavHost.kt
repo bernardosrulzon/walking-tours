@@ -114,7 +114,6 @@ fun WalkingToursNavHost(onRequestLocationPermission: () -> Unit) {
             val city = entry.arguments?.getString("city").orEmpty()
             TourListScreen(
                 onOpenTour = { tourId -> navController.navigate(Routes.tourDetail(tourId)) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 city = city,
                 onBack = { navController.popBackStack() },
             )

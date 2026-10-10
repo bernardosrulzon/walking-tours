@@ -82,6 +82,7 @@ import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.tour.TourSessionManager
 import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
+import com.walkingtours.app.ui.components.InfoCard
 import com.walkingtours.app.ui.components.InfoRow
 import com.walkingtours.app.ui.components.NarrationTransport
 import com.walkingtours.app.ui.components.Pill
@@ -528,7 +529,8 @@ fun StopScreen(
                     if (stopIndex < 0) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -674,7 +676,7 @@ fun StopScreen(
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         text = current.category,
-                                        style = MaterialTheme.typography.labelLarge,
+                                        style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                     Text(
@@ -730,7 +732,7 @@ fun StopScreen(
                                 ) {
                                     Text(
                                         text = "Transcript",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -756,11 +758,9 @@ fun StopScreen(
                         }
 
                         // Visitor information: the reference material that makes this the stop page.
-                        Card(
+                        // Outlined reference panel — the filled card on this page is the player.
+                        InfoCard(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            ),
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 SectionTitle("Visitor information")
@@ -797,33 +797,38 @@ fun StopScreen(
                         }
 
                         current.insiderTip.takeIf { it.isNotBlank() }?.let { tip ->
-                            Card(
+                            InfoCard(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                ),
                             ) {
                                 Column(Modifier.padding(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Filled.Star,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                        Spacer(Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                                    RoundedCornerShape(10.dp),
+                                                ),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.Star,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                        Spacer(Modifier.width(10.dp))
                                         Text(
                                             text = "Insider tip",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         )
                                     }
                                     Spacer(Modifier.height(8.dp))
                                     Text(
                                         text = tip,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                                     )
                                 }
                             }
@@ -939,17 +944,13 @@ private fun TuneStopSheet(
 
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 quick.forEach { chip ->
-                    Box(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50))
-                            .clickable { note = if (note.isBlank()) chip else "$note; $chip" }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                    ) {
-                        Text(chip, style = MaterialTheme.typography.labelMedium)
-                    }
+                    Pill(
+                        text = chip,
+                        modifier = Modifier.clickable { note = if (note.isBlank()) chip else "$note; $chip" },
+                    )
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -1057,7 +1058,7 @@ private fun StopListSheet(
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)),
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(50)),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
@@ -1105,7 +1106,7 @@ private fun StopListSheet(
                                         if (stop.id in visitedIds) {
                                             MaterialTheme.colorScheme.secondary
                                         } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
                                         },
                                         RoundedCornerShape(50),
                                     ),

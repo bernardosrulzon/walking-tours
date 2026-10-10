@@ -1,12 +1,12 @@
 package com.walkingtours.app.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -119,9 +120,9 @@ fun NarrationTransport(
         )
         Spacer(Modifier.width(6.dp))
         Surface(
-            shape = RoundedCornerShape(9.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.clickable {
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            onClick = {
                 val options = listOf(0.75f, 1.0f, 1.25f, 1.5f)
                 val next = options[(options.indexOfFirst { kotlin.math.abs(it - rate) < 0.01f } + 1)
                     .mod(options.size)]
@@ -130,9 +131,10 @@ fun NarrationTransport(
         ) {
             Text(
                 text = if (kotlin.math.abs(rate - 1.0f) < 0.01f) "1x" else "${rate}x",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }

@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -39,6 +40,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.GoogleMapOptions
 import com.google.android.gms.maps.MapView as GoogleMapView
 import com.google.android.gms.maps.model.BitmapDescriptor
@@ -47,6 +49,7 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.Dot
 import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapColorScheme
 import com.google.android.gms.maps.model.PatternItem
 import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
@@ -58,6 +61,7 @@ import com.google.maps.android.compose.Polyline as GooglePolyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
 import com.walkingtours.app.BuildConfig
+import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.WalkingToursApp
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.maps.DirectionsClient
@@ -889,7 +893,28 @@ fun MapsWarmUp(lat: Double?, lng: Double?, modifier: Modifier = Modifier) {
 }
 
 /**
+ * The map's colour scheme, following the app's Appearance setting rather than the device's.
+ *
+ * The modern Maps renderer defaults to [MapColorScheme.FOLLOW_SYSTEM], which is why a phone in
+ * system dark mode drew a dark map even when the app itself was set to light. Pinning it to
+ * LIGHT or DARK makes the basemap agree with the app in every combination.
+ */
+@Composable
+private fun rememberMapColorScheme(): Int {
+    val aiState by ServiceLocator.aiSettings.state.collectAsStateWithLifecycle()
+    val systemDark = isSystemInDarkTheme()
+    val dark = when (aiState.themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> systemDark
+    }
+    return if (dark) MapColorScheme.DARK else MapColorScheme.LIGHT
+}
+
+/**
  * The same itinerary map, drawn by Google Maps, used only when a Maps key was compiled in.
+ *
+ * The look is deliberately identical to the osmdroid path: the same numbered pins from the shared
  *
  * The look is deliberately identical to the osmdroid path: the same numbered pins from the shared
  * icon helper, the same blue dot with its heading cone, and the same one-time fit of one leg rather
@@ -1033,6 +1058,10 @@ private fun GoogleTourMap(
 
     val walker = rememberWalkerDot(userLat, userLng, userHeading)
 
+    // The basemap follows the app's Appearance, not the device's: pinned to LIGHT or DARK so a
+    // dark phone cannot drag a light app's map with it.
+    val mapColorScheme = rememberMapColorScheme()
+
     GoogleMap(
         modifier = modifier
             .clipToBounds()
@@ -1044,7 +1073,12 @@ private fun GoogleTourMap(
         // the camera to arrive. Given it here, the very first frame the SDK draws is already the
         // route's own city.
         googleMapOptionsFactory = {
-            GoogleMapOptions().apply { initialCamera?.let { camera(it) } }
+            GoogleMapOptions().apply {
+                initialCamera?.let { camera(it) }
+                // The scheme goes into the options as well as the effect below: a map created
+                // with FOLLOW_SYSTEM would paint one dark frame before the effect corrects it.
+                mapColorScheme(mapColorScheme)
+            }
         },
         // osmdroid's zoom buttons are hidden and the app draws its own position dot, so Google's
         // equivalents — including the "open in Google Maps" toolbar — would be new clutter. Every
@@ -1061,6 +1095,10 @@ private fun GoogleTourMap(
         // The map object exists from here on, and maps-compose has already moved it to the camera
         // this composable set. Nothing is gained by leaving it hidden any longer.
         MapEffect(Unit) { mapReady = true }
+
+        // Re-applies the colour scheme whenever the Appearance setting resolves differently, so a
+        // light ↔ dark switch restyles the live map object even when the phone is dark underneath.
+        MapEffect(mapColorScheme) { map -> map.setMapColorScheme(mapColorScheme) }
 
         if (linePoints.size >= 2) {
             // Dot then gap, shared by both lines, so the casing's wider dots sit concentrically

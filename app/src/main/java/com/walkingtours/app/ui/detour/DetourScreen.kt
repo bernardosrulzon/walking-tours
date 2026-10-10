@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -438,12 +439,13 @@ fun DetourTopicsSheet(
                 else -> {
                     topics!!.forEach { topic ->
                         Card(
+                            onClick = { onPick(topic) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clickable { onPick(topic) },
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             ),
                         ) {
                             Column(Modifier.padding(16.dp)) {
@@ -451,15 +453,14 @@ fun DetourTopicsSheet(
                                     text = topic.title,
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 )
                                 if (topic.blurb.isNotBlank()) {
                                     Spacer(Modifier.height(4.dp))
                                     Text(
                                         text = topic.blurb,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        maxLines = 3,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }

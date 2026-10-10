@@ -7,11 +7,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.walkingtours.app.ui.nav.WalkingToursNavHost
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ui.nav.WalkingToursNavHost
 import com.walkingtours.app.ui.theme.WalkingToursTheme
 
@@ -40,7 +44,22 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
 
         setContent {
-            WalkingToursTheme {
+            val aiState by ServiceLocator.aiSettings.state.collectAsStateWithLifecycle()
+            val darkBars = when (aiState.themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            // Edge-to-edge draws the app behind the status bar, so the system icons need to
+            // match the theme: dark icons on light backgrounds, light icons on dark ones.
+            // Without this the controller keeps light icons over our light top bars.
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).let { controller ->
+                    controller.isAppearanceLightStatusBars = !darkBars
+                    controller.isAppearanceLightNavigationBars = !darkBars
+                }
+            }
+            WalkingToursTheme(themeMode = aiState.themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

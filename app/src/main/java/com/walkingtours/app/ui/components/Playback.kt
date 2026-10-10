@@ -105,7 +105,7 @@ fun PlaybackControls(
                     color = if (selected) {
                         MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.surfaceVariant
+                        MaterialTheme.colorScheme.surfaceContainerHigh
                     },
                     onClick = { onRateChange(option) },
                 ) {

@@ -1,14 +1,16 @@
 package com.walkingtours.app.ui.tourdetail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
@@ -35,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -53,9 +57,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.data.db.TourEntity
-import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
 import com.walkingtours.app.ui.components.AssetPhoto
+import com.walkingtours.app.ui.components.InfoCard
 import com.walkingtours.app.ui.components.Pill
 import com.walkingtours.app.ui.components.SectionTitle
 import com.walkingtours.app.ui.components.TourMap
@@ -151,6 +155,21 @@ fun TourDetailScreen(
     val tourEntity = tour
     val visited = progress.map { it.stopId }.toSet()
     val totalStopMinutes = stops.sumOf { it.suggestedMinutes }
+    // Three states, one button: nothing done, part done, all done. Once every stop is completed
+    // there is nothing left to resume to, so it offers to begin again.
+    val allDone = stops.isNotEmpty() && stops.all { it.id in visited }
+    val startAction = when {
+        allDone -> onStartOver
+        visited.isEmpty() -> onStartTour
+        // Resume does not replay the introduction: the walker has already begun, and what they
+        // want is the next stop still to see.
+        else -> onResumeTour
+    }
+    val startLabel = when {
+        allDone -> "Start over"
+        visited.isEmpty() -> "Start tour"
+        else -> "Resume tour"
+    }
     val ticketed = stops.filter { !it.isFree }
     // When every ticketed stop shares one note — a tour covered by a single combined ticket — say
     // that once instead of repeating it down a list of stops.
@@ -162,7 +181,47 @@ fun TourDetailScreen(
 
     Scaffold(
         bottomBar = {
-            AskBar(placeholder = "Ask about this tour", onClick = { showChat = true })
+            // Two fixed actions, thumb-sized: Ask opens the assistant sheet, Start begins or
+            // resumes the walk. They live here rather than in the scrolling content so the
+            // walker never has to scroll back up to set off.
+            Surface(
+                tonalElevation = 3.dp,
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showChat = true },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ask", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Button(
+                        onClick = startAction,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Explore,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(startLabel, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
         },
         topBar = {
             TopAppBar(
@@ -206,7 +265,7 @@ fun TourDetailScreen(
             Column(Modifier.padding(16.dp)) {
                 Text(
                     text = tourEntity?.title ?: "Loading\u2026",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -217,89 +276,72 @@ fun TourDetailScreen(
                 )
                 Spacer(Modifier.height(14.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Pill("${stops.size} stops", icon = Icons.Filled.Place)
                     Pill(
                         "${tourEntity?.distanceKm ?: 0.0} km",
                         icon = Icons.AutoMirrored.Filled.DirectionsWalk,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pill(
-                        Formatters.duration(tourEntity?.totalWalkMinutes ?: 0) + " walking",
-                        icon = Icons.Filled.Schedule,
                     )
                     Pill(
                         Formatters.totalExperience(
                             tourEntity?.totalWalkMinutes ?: 0,
                             totalStopMinutes,
                         ) + " with visits",
+                        icon = Icons.Filled.Schedule,
                     )
                 }
 
                 Spacer(Modifier.height(16.dp))
-                // Three states, one button: nothing done, part done, all done. Once every stop
-                // is completed there is nothing left to resume to, so it offers to begin again.
-                val allDone = stops.isNotEmpty() && stops.all { it.id in visited }
-                Button(
-                    onClick = when {
-                        allDone -> onStartOver
-                        visited.isEmpty() -> onStartTour
-                        // Resume does not replay the introduction: the walker has already begun,
-                        // and what they want is the next stop still to see.
-                        else -> onResumeTour
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Filled.Explore, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        when {
-                            allDone -> "Start over"
-                            visited.isEmpty() -> "Start tour"
-                            else -> "Resume tour"
-                        },
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
                 // Who is telling the story, and the way to change them. Choosing happens
-                // automatically on the first Start tour; this is the door back to it.
-                Card(
+                // automatically on the first Start tour; this is the door back to it. Outlined,
+                // not filled: info panels never compete with the tappable cards below.
+                InfoCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    ),
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            Icons.Filled.Explore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(22.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    RoundedCornerShape(14.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Explore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = "Your guide",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 text = guide?.name ?: "Not chosen yet",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                             guide?.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
                                 Text(
                                     text = tagline,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -312,34 +354,42 @@ fun TourDetailScreen(
                 Spacer(Modifier.height(12.dp))
                 // A way off the route: generated deep-dives into the country behind the walk —
                 // history, politics, culture — told by the same guide, with no walking required.
-                Card(
+                InfoCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            Icons.Filled.Explore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    RoundedCornerShape(14.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Explore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = "Go on a detour",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                             Text(
                                 text = "The history, politics and culture behind this walk",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
                         }
                         TextButton(onClick = { showDetours = true }) {
@@ -350,26 +400,34 @@ fun TourDetailScreen(
             }
 
             // ---- Ticket summary -------------------------------------------------
-            Card(
+            // Outlined like the guide/detour panels: a long ticket list must not become a wall
+            // of colour. The tint lives in the icon box only.
+            InfoCard(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                ),
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                    RoundedCornerShape(12.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
                         Text(
                             text = "Tickets and entrance fees",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -382,7 +440,6 @@ fun TourDetailScreen(
                                 "${ticketed.size} need a ticket."
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -390,7 +447,7 @@ fun TourDetailScreen(
                             "once a year. Treat every figure in this app as a guide and check " +
                             "at the gate.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (ticketed.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
@@ -399,7 +456,6 @@ fun TourDetailScreen(
                                 text = sharedTicketNote,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
                             )
                         } else {
                             ticketed.forEach { stop ->
@@ -410,7 +466,6 @@ fun TourDetailScreen(
                                     Text(
                                         text = "${stop.order}. ${stop.name}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         modifier = Modifier.weight(1f),
                                     )
                                     Spacer(Modifier.width(12.dp))
@@ -418,7 +473,6 @@ fun TourDetailScreen(
                                         text = stop.entranceFeeTry,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         textAlign = TextAlign.End,
                                         // Cap the fee column so a long price string cannot squeeze
                                         // the stop name down to one word per line.
@@ -456,24 +510,25 @@ fun TourDetailScreen(
             // page of the walk, and tapping it is the same act as pressing Start tour.
             if (tourEntity?.overviewText?.isNotBlank() == true) {
                 Card(
+                    onClick = onStartTour,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clickable(onClick = onStartTour),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 ) {
-                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                                .size(56.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 Icons.Filled.PlayArrow,
                                 contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                         Spacer(Modifier.width(12.dp))
@@ -514,28 +569,30 @@ private fun LabeledParagraph(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StopRow(stop: StopEntity, visited: Boolean, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(56.dp)
                     .background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(10.dp),
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                        RoundedCornerShape(16.dp),
                     ),
             ) {
                 AssetPhoto(
                     assetPath = stop.photoAsset,
                     contentDescription = stop.name,
-                    modifier = Modifier.size(64.dp),
+                    modifier = Modifier.size(56.dp),
                     targetWidthPx = 240,
                 )
             }
@@ -553,31 +610,30 @@ private fun StopRow(stop: StopEntity, visited: Boolean, onClick: () -> Unit) {
                         text = stop.name,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
                 Text(
                     text = stop.category,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(Modifier.height(6.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("${stop.suggestedMinutes} min")
                     // Covered stops have no fee of their own; the tour's ticket card says so once.
                     if (stop.entranceFeeTry.isNotBlank()) {
-                        Pill(
-                            text = stop.entranceFeeTry,
-                            container = if (stop.isFree) {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            },
-                            contentColor = if (stop.isFree) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onTertiaryContainer
-                            },
-                        )
+                        if (stop.isFree) {
+                            Pill(
+                                text = stop.entranceFeeTry,
+                                container = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        } else {
+                            Pill(text = stop.entranceFeeTry)
+                        }
                     }
                 }
             }

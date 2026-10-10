@@ -36,6 +36,11 @@ private val LightColors = lightColorScheme(
     onSurface = Ink,
     surfaceVariant = Color(0xFFE6EBF0),
     onSurfaceVariant = Color(0xFF44505C),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF1F4F7),
+    surfaceContainer = Color(0xFFECEFF2),
+    surfaceContainerHigh = Color(0xFFE6EBF0),
+    surfaceContainerHighest = Color(0xFFDDE3EA),
 )
 
 private val DarkColors = darkColorScheme(
@@ -57,13 +62,23 @@ private val DarkColors = darkColorScheme(
     onSurface = Color(0xFFE2E7EC),
     surfaceVariant = Color(0xFF2A323B),
     onSurfaceVariant = Color(0xFFC0C9D3),
+    surfaceContainerLowest = Color(0xFF0B0F13),
+    surfaceContainerLow = Color(0xFF1B2129),
+    surfaceContainer = Color(0xFF222A33),
+    surfaceContainerHigh = Color(0xFF2A323B),
+    surfaceContainerHighest = Color(0xFF353E48),
 )
 
 @Composable
 fun WalkingToursTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: String = "system",
     content: @Composable () -> Unit,
 ) {
+    val darkTheme = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         content = content,

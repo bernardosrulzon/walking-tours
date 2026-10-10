@@ -20,6 +20,22 @@ val NARRATION_LANGUAGES: List<Pair<String, String>> = listOf(
     NARRATION_LANGUAGE_PT_BR to "Português (BR)",
 )
 
+/** The appearance modes the app offers, with their display labels. */
+val THEME_MODES: List<Pair<String, String>> = listOf(
+    THEME_MODE_SYSTEM to "System",
+    THEME_MODE_LIGHT to "Light",
+    THEME_MODE_DARK to "Dark",
+)
+
+/** Follow the system dark-mode setting. */
+const val THEME_MODE_SYSTEM = "system"
+
+/** Always use the light palette. */
+const val THEME_MODE_LIGHT = "light"
+
+/** Always use the dark palette. */
+const val THEME_MODE_DARK = "dark"
+
 /**
  * User-facing AI configuration.
  *
@@ -43,6 +59,8 @@ data class AiSettingsState(
     val autoPlayChapters: Boolean = true,
     /** BCP 47 tag for the narration language: "en-US" or "pt-BR". */
     val narrationLanguage: String = NARRATION_LANGUAGE,
+    /** Appearance: "system", "light" or "dark". */
+    val themeMode: String = THEME_MODE_SYSTEM,
 ) {
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 
@@ -82,6 +100,8 @@ class AiSettings(context: Context) {
             autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, true),
             narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
                 .takeIf { it in NARRATION_LANGUAGES.map { (tag, _) -> tag } } ?: NARRATION_LANGUAGE,
+            themeMode = (prefs.getString(KEY_THEME_MODE, null) ?: THEME_MODE_SYSTEM)
+                .takeIf { it in THEME_MODES.map { (tag, _) -> tag } } ?: THEME_MODE_SYSTEM,
         )
     }
 
@@ -97,6 +117,7 @@ class AiSettings(context: Context) {
             .putFloat(KEY_RATE, next.narrationRate)
             .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
             .putString(KEY_NARRATION_LANGUAGE, next.narrationLanguage)
+            .putString(KEY_THEME_MODE, next.themeMode)
             .apply()
     }
 
@@ -109,6 +130,7 @@ class AiSettings(context: Context) {
         const val KEY_RATE = "narration_rate"
         const val KEY_AUTO_PLAY = "auto_play_chapters"
         const val KEY_NARRATION_LANGUAGE = "narration_language"
+        const val KEY_THEME_MODE = "theme_mode"
     }
 }
 

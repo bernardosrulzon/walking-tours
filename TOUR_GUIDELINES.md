@@ -25,6 +25,22 @@ in front of the thing with earphones in — talk to them, not past them. Facts f
 every name, date, number and claim must be true. Prices and hours always come with a verify-at-the-
 gate caveat, because they move.
 
+Every part of the tour should leave the walker feeling they learned something real — a mechanism,
+a belief, a tension, a story that reframes the place. That is the bar, and it is about balance,
+not density: plain sentences are fine when they carry something, and a stop can be short as long
+as it teaches. What fails the bar is platitude: generic wonder ("magical", "breathtaking"),
+adjectives standing in for observation, throat-clearing openers, stage directions that direct
+nothing, and long descriptions where each clause teaches nothing new. Humor, irreverence and
+personality are delivery, never a substitute: a joke must land on a fact. When in doubt, ask of
+each stop: what will the walker understand here that they didn't five minutes ago? If the answer
+is nothing, rewrite.
+
+Assume the walker knows nothing about this city or country. They have no context, and they need
+the guide to supply it as part of the tour: explain every local term, currency unit, historical
+actor and religious concept inline, on first use, in a breath — who the Mughals were, what a lakh
+is, what a panda does, what moksha promises. Never use a word the walker cannot be expected to
+know without unpacking it right there. An unexplained term is a door closed in the walker's face.
+
 ## 3. The intro: explain the place, not just the walk
 
 The overview is NOT a table of contents. Anyone can see the stop list. The intro's job is to give
@@ -46,7 +62,18 @@ critics mourn what was demolished"), never take a side, never propagandize, neve
 numbers (death tolls, crowd sizes, costs) are either omitted or attributed.
 
 Structure that works: hook → the place (this section) → the shape of the walk → practicals →
-one-line send-off. Aim for 400–550 words total.
+one-line send-off. Aim for 400–550 words; an intro that has to establish a whole unfamiliar context
+may run to about five minutes, but clarity first — longer must never mean woollier.
+
+Two structural rules, learned the hard way:
+
+- **The intro is not a stop list.** Never walk through the itinerary stop by stop ("you will meet
+  X, then Y, then Z..."). The shape-of-the-walk paragraph stays short — two or three sentences on
+  where it starts, how it moves and where it ends. If it reads like a table of contents, cut it.
+- **Meaning before itinerary.** The place paragraph comes before the shape paragraph: the walker
+  should understand WHY the city matters (why people bring their dead here, why the square
+  matters, why the palace was built) before hearing where the walk goes. A walker who knows why
+  will forgive any route; a walker with only a route has nothing to care about.
 
 ## 4. Coordinates: measured, not guessed
 
@@ -87,7 +114,15 @@ Commons`.
 Respect beats coverage: no cremation close-ups at Manikarnika, no photo of the Kumari herself
 (courtyard exterior only), no bathers. Say the rule in the narration where it applies.
 
-## 7. Before it ships
+## 8. Guide personas: adapt, don't overhaul
+
+The authored narration is the fallback every persona starts from, and it is the spine they keep.
+A persona adapts the storyline to its style — restructuring, reframing, adding relevant color and
+asides only it would know — but it must not completely overhaul the fallback content. A walker who
+heard two personas' versions should recognize the same walk, told differently. Style, interests and
+feedback shape *how* it is told; the fallback decides *what* is told.
+
+## 9. Before it ships
 
 - `python3 -c "import json; json.load(open(...))"` parses.
 - Stop orders are 1-based sequential; every `photoAsset` file exists.

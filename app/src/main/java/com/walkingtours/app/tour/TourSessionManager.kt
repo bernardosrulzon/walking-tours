@@ -261,6 +261,10 @@ class TourSessionManager(
      * model is working, the page shows its loading state; nothing plays until the text is ready.
      */
     private fun playOverviewNarration(tourId: String, overview: String) {
+        // A new chapter cuts the previous audio at once: the replacement only arrives after its
+        // text is generated, and the old stop must not keep talking through the loading state.
+        narration.stop()
+        guide.ensureVoiceMatchesGuide(tourId)
         narrationJob?.cancel()
         narrationJob = scope.launch {
             val line = guide.narration(
@@ -533,7 +537,11 @@ class TourSessionManager(
 
         // Load the guide's version of this stop — a cached one is instant — then speak it. The page
         // shows its loading state in the meantime, so the words on screen and the voice always match.
+        // The previous stop's audio stops now, not when the new text arrives: swiping on must never
+        // leave two stops talking over each other.
         val tourId = current.tourId ?: return
+        narration.stop()
+        guide.ensureVoiceMatchesGuide(tourId)
         narrationJob?.cancel()
         narrationJob = scope.launch {
             val line = guide.narration(

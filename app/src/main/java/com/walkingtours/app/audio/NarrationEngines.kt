@@ -19,7 +19,7 @@ object NarrationEngines {
         settings: AiSettings,
         cloudClient: GeminiTtsClient,
         useCloudVoice: Boolean,
-    ): NarrationEngine = if (useCloudVoice && settings.current.hasCloudVoiceKey) {
+    ): NarrationEngine = if (useCloudVoice && settings.current.hasGeminiKey) {
         GeminiTtsNarrationEngine(context, settings, cloudClient)
     } else {
         AndroidTtsNarrationEngine(context, settings)

@@ -124,7 +124,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Column(Modifier.weight(1f)) {
                             Text("Use Gemini voice", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = if (state.hasCloudVoiceKey) {
+                                text = if (state.hasGeminiKey) {
                                     "Expressive, acted narration. Billed per request after a free allowance."
                                 } else {
                                     "Add a Gemini API key below to enable this."
@@ -135,7 +135,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                         Switch(
                             checked = state.useCloudVoice,
-                            enabled = state.hasCloudVoiceKey,
+                            enabled = state.hasGeminiKey,
                             onCheckedChange = { on -> settings.update { it.copy(useCloudVoice = on) } },
                         )
                     }
@@ -173,7 +173,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     }
                                 }
                             },
-                            enabled = state.hasCloudVoiceKey && !loadingVoices,
+                            enabled = state.hasGeminiKey && !loadingVoices,
                         ) {
                             if (loadingVoices) {
                                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
@@ -186,7 +186,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 narration.stop()
                                 narration.play("__voice_test__", TEST_PHRASE)
                             },
-                            enabled = state.hasCloudVoiceKey,
+                            enabled = state.hasGeminiKey,
                         ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
@@ -348,12 +348,12 @@ fun SettingsScreen(onBack: () -> Unit) {
 private fun SetupSteps() {
     val steps = listOf(
         "Create a Google Cloud project, or reuse one you already have.",
-        "Turn on billing for that project. Cloud Text-to-Speech requires it even inside the free allowance.",
-        "Enable the Cloud Text-to-Speech API from the APIs & Services library.",
+        "Turn on billing for that project if you plan to go beyond the free allowance.",
+        "Enable the Generative Language API from the APIs & Services library.",
         "Create an API key under APIs & Services, then Credentials.",
         "Restrict the key: Application restrictions \u2192 Android apps, and add package name " +
             "com.walkingtours.app plus your signing certificate SHA-1.",
-        "Under API restrictions, limit the key to Cloud Text-to-Speech API.",
+        "Under API restrictions, limit the key to the Generative Language API.",
         "For the assistant, get a Gemini key from Google AI Studio and paste it above. It can live in " +
             "the same project.",
         "Paste the keys above and use the Test buttons to confirm everything works.",

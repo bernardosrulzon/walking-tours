@@ -6,19 +6,23 @@ import org.json.JSONObject
  * A guide persona the walker can choose, generated for one tour and remembered for it.
  *
  * [style] is the instruction handed back to the model when it rewrites a stop in this voice, so it
- * is stored with the persona rather than re-derived.
+ * is stored with the persona rather than re-derived. [gender] is "feminine" or "masculine" when the
+ * character reads as one, else blank — the spoken voice is matched to it, so a guide never sounds
+ * like the wrong person.
  */
 data class Guide(
     val id: String,
     val name: String,
     val tagline: String,
     val style: String,
+    val gender: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("name", name)
         .put("tagline", tagline)
         .put("style", style)
+        .put("gender", gender)
 
     companion object {
         fun fromJson(json: JSONObject): Guide? {
@@ -29,6 +33,8 @@ data class Guide(
                 name = name,
                 tagline = json.optString("tagline").trim(),
                 style = json.optString("style").trim(),
+                gender = json.optString("gender").trim().lowercase()
+                    .takeIf { it == "feminine" || it == "masculine" }.orEmpty(),
             )
         }
 
@@ -51,14 +57,17 @@ val FALLBACK_GUIDES: List<Guide> = listOf(
     Guide(
         "storyteller", "Meryem the Storyteller", "Every stone has a story.",
         "warm and anecdotal; opens with a scene and a person, then widens out",
+        "feminine",
     ),
     Guide(
         "detective", "Kemal the Detective", "Ask who really benefited.",
         "dry and curious; follows money, motives and the version nobody printed",
+        "masculine",
     ),
     Guide(
         "local", "Leyla the Local", "The guidebook always misses lunch.",
         "chatty and practical; food, people and everyday life, present tense",
+        "feminine",
     ),
     Guide(
         "professor", "Professor Deniz", "Precise, surprising, never dull.",
@@ -76,14 +85,17 @@ val FALLBACK_GUIDES_PT: List<Guide> = listOf(
     Guide(
         "storyteller", "Meryem, a Contadora de Histórias", "Toda pedra tem uma história.",
         "warm and anecdotal; opens with a scene and a person, then widens out",
+        "feminine",
     ),
     Guide(
         "detective", "Kemal, o Detetive", "Pergunte a quem aquilo interessava.",
         "dry and curious; follows money, motives and the version nobody printed",
+        "masculine",
     ),
     Guide(
         "local", "Leyla, a Local", "O guia sempre esquece o almoço.",
         "chatty and practical; food, people and everyday life, present tense",
+        "feminine",
     ),
     Guide(
         "professor", "Professor Deniz", "Preciso, surpreendente, nunca monótono.",

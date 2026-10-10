@@ -15,15 +15,65 @@ val GEMINI_TTS_VOICES: List<String> = listOf(
     "Sulafat",
 )
 
+/**
+ * Documented gender of each prebuilt voice, from the voice table in AI Studio's speech generation
+ * docs. A guide must never sound like the wrong person, so this is what the voice is matched
+ * against — keep it in step with that table if voices are added.
+ */
+val VOICE_GENDERS: Map<String, String> = mapOf(
+    "Kore" to "feminine",
+    "Aoede" to "feminine",
+    "Leda" to "feminine",
+    "Autonoe" to "feminine",
+    "Despina" to "feminine",
+    "Erinome" to "feminine",
+    "Laomedeia" to "feminine",
+    "Achernar" to "feminine",
+    "Pulcherrima" to "feminine",
+    "Vindemiatrix" to "feminine",
+    "Sulafat" to "feminine",
+    "Zephyr" to "feminine",
+    "Puck" to "masculine",
+    "Charon" to "masculine",
+    "Fenrir" to "masculine",
+    "Orus" to "masculine",
+    "Enceladus" to "masculine",
+    "Iapetus" to "masculine",
+    "Umbriel" to "masculine",
+    "Algieba" to "masculine",
+    "Algenib" to "masculine",
+    "Rasalgethi" to "masculine",
+    "Alnilam" to "masculine",
+    "Schedar" to "masculine",
+    "Gacrux" to "masculine",
+    "Achird" to "masculine",
+    "Zubenelgenubi" to "masculine",
+    "Sadachbia" to "masculine",
+    "Sadaltager" to "masculine",
+)
+
+/** The voice a guide of this gender speaks with when nothing more specific is chosen. */
+const val FEMININE_VOICE = "Kore"
+const val MASCULINE_VOICE = "Charon"
+
+/**
+ * The voice [guide] must speak with: the current one when its gender already matches, else the
+ * default voice of the guide's gender. A guide with no recorded gender keeps whatever is configured.
+ */
+fun voiceForGuide(guide: Guide, currentVoice: String): String {
+    val want = guide.gender.takeIf { it == "feminine" || it == "masculine" }
+        ?: return if (currentVoice in GEMINI_TTS_VOICES) currentVoice else DEFAULT_CLOUD_VOICE
+    val current = if (currentVoice in GEMINI_TTS_VOICES) currentVoice else DEFAULT_CLOUD_VOICE
+    if (VOICE_GENDERS[current] == want) return current
+    return if (want == "feminine") FEMININE_VOICE else MASCULINE_VOICE
+}
+
 /** One selectable narration voice. */
 data class CloudVoice(
     val name: String,
     val languageCodes: List<String>,
     val gender: String,
 ) {
-    /** Kept for the settings list: Gemini voices are one family. */
-    val isChirp3Hd: Boolean get() = false
-
     /** The whole name is the label here, e.g. "Kore". */
     val shortName: String get() = name
 
@@ -53,7 +103,20 @@ class GeminiTtsClient(
 
     /** Prebuilt voices. The list is static; there is nothing to fetch. */
     fun listVoices(languageCode: String = NARRATION_LANGUAGE): List<CloudVoice> =
-        GEMINI_TTS_VOICES.map { CloudVoice(name = it, languageCodes = listOf(languageCode), gender = "") }
+        GEMINI_TTS_VOICES.map {
+            CloudVoice(name = it, languageCodes = listOf(languageCode), gender = VOICE_GENDERS[it].orEmpty())
+        }
+
+    /**
+     * The voice [guide] must speak with: the current one when its gender already matches, else the
+     * default voice of the guide's gender. A guide with no gender keeps whatever is configured.
+     */
+    fun voiceForGuide(guide: Guide, currentVoice: String): String {
+        val want = guide.gender.takeIf { it == "feminine" || it == "masculine" } ?: return normalizeVoice(currentVoice)
+        val current = normalizeVoice(currentVoice)
+        if (VOICE_GENDERS[current] == want) return current
+        return if (want == "feminine") FEMININE_VOICE else MASCULINE_VOICE
+    }
 
     /**
      * Keeps a voice that Gemini TTS knows, and replaces anything else — such as a Cloud TTS name

@@ -130,6 +130,10 @@ fun PersonaScreen(
                     onChangeExplorer = { step = Step.EXPLORER },
                     onPick = { guide ->
                         personaSettings.setGuide(tourId, guide)
+                        // The voice follows the guide's gender, so a guide never sounds like the
+                        // wrong person. Applied here, where the choice is made, and re-checked
+                        // before every play in case the voice was changed afterwards.
+                        guideController.ensureVoiceMatchesGuide(tourId)
                         onDone()
                     },
                 )

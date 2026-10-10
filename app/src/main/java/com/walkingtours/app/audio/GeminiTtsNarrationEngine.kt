@@ -52,7 +52,7 @@ class GeminiTtsNarrationEngine(
     private val _progress = MutableStateFlow(NarrationProgress())
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
-    override val isAvailable: Boolean get() = settings.current.hasCloudVoiceKey
+    override val isAvailable: Boolean get() = settings.current.hasGeminiKey
 
     override val engineLabel: String
         get() = "Gemini voice \u00b7 ${client.normalizeVoice(settings.current.cloudVoiceName)}"

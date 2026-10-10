@@ -14,11 +14,10 @@ fun secretKey(name: String): String =
     localProperties.getProperty(name) ?: System.getenv(name) ?: ""
 
 val googleApiKey = secretKey("google.api.key")
-val googleTtsApiKey = secretKey("google.tts.apiKey").ifBlank { googleApiKey }
 val googleGeminiApiKey = secretKey("google.gemini.apiKey").ifBlank { googleApiKey }
 
 /**
- * The Maps SDK reads its key from the manifest, so unlike the TTS and Gemini keys this one cannot be
+ * The Maps SDK reads its key from the manifest, so unlike the Gemini key this one cannot be
  * supplied from the in-app Settings screen: it has to exist when the app is built. A blank value is
  * the normal case and simply means the app draws its OpenStreetMap map instead.
  */
@@ -52,7 +51,6 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        buildConfigField("String", "GOOGLE_TTS_API_KEY", "\"$googleTtsApiKey\"")
         buildConfigField("String", "GOOGLE_GEMINI_API_KEY", "\"$googleGeminiApiKey\"")
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey

@@ -56,11 +56,7 @@ object ServiceLocator {
     val personaSettings: PersonaSettings by lazy { PersonaSettings(appContext) }
 
     val geminiTtsClient: GeminiTtsClient by lazy {
-        // The Gemini key first: this is a Gemini model. The Cloud TTS key is only a fallback for a
-        // build that predates the switch.
-        GeminiTtsClient(appContext) {
-            aiSettings.current.geminiApiKey.ifBlank { aiSettings.current.ttsApiKey }
-        }
+        GeminiTtsClient(appContext) { aiSettings.current.geminiApiKey }
     }
 
     val geminiClient: GeminiClient by lazy {

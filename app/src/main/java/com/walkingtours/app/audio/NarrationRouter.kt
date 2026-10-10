@@ -87,7 +87,7 @@ class NarrationRouter(
     fun refreshFromSettings() {
         val state = settings.current
         val desiredKey = if (state.cloudVoiceReady) {
-            "cloud:${state.cloudVoiceName}:${state.ttsApiKey.hashCode()}:${state.narrationLanguage}"
+            "cloud:${state.cloudVoiceName}:${state.geminiApiKey.hashCode()}:${state.narrationLanguage}"
         } else {
             "device:${state.narrationLanguage}"
         }

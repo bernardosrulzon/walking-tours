@@ -105,6 +105,14 @@ class GuideController(
     /** In-flight rewrites, so two callers asking for the same stop share one model call. */
     private val jobs = mutableMapOf<String, Deferred<SpokenLine>>()
 
+    /**
+     * Suggested guides by "tour|preferences|language". Preferences are part of the key, so changing
+     * them regenerates; otherwise the picker reuses the last answer instead of paying for it again.
+     * Only successful generations are cached — a fallback is never stored, so a transient failure
+     * still retries next time.
+     */
+    private val guideSuggestions = mutableMapOf<String, List<Guide>>()
+
     private var model: String? = null
 
     /** The signature the current guide, preferences and tone produce for [tourId], or null. */
@@ -151,14 +159,39 @@ class GuideController(
      */
     suspend fun suggestGuides(tourId: String, explorers: List<ExplorerType>): List<Guide> {
         val language = settings.current.narrationLanguage
+        val cacheId = "$tourId|${explorers.joinToString(",") { it.id }}|$language"
+        guideSuggestions[cacheId]?.let { return it }
         if (!settings.current.hasGeminiKey) return fallbackGuides(language)
         val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return fallbackGuides(language)
         val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
-        return runCatching { requestGuides(tour, stops, explorers, language) }
+        val guides = runCatching { requestGuides(tour, stops, explorers, language) }
             .onFailure { Log.w(TAG, "Guide suggestion failed; using fallback guides", it) }
             .getOrNull()
             ?.takeIf { it.size >= 3 }
-            ?: fallbackGuides(language)
+        if (guides != null) guideSuggestions[cacheId] = guides
+        return guides ?: fallbackGuides(language)
+    }
+
+    /**
+     * The voice the tour's guide must speak with, or null when there is no guide to match. The
+     * TTS voice and the guide's gender are bound together: a feminine guide never speaks with a
+     * masculine voice, whatever is configured.
+     */
+    fun voiceForGuide(tourId: String): String? {
+        val guide = personaSettings.current.guide(tourId) ?: return null
+        return voiceForGuide(guide, settings.current.cloudVoiceName)
+    }
+
+    /**
+     * Point the configured voice at the tour guide's gender. No-op when it already matches, so this
+     * is safe to call before every play: the setting — and the engine built from it — only changes
+     * on a real mismatch.
+     */
+    fun ensureVoiceMatchesGuide(tourId: String) {
+        val voice = voiceForGuide(tourId) ?: return
+        if (settings.current.cloudVoiceName != voice) {
+            settings.update { it.copy(cloudVoiceName = voice) }
+        }
     }
 
     /**
@@ -254,7 +287,7 @@ class GuideController(
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
                 appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
                 appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
-                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words) and style (one sentence on how this guide speaks, for a narrator to imitate).")
+                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), style (one sentence on how this guide speaks, for a narrator to imitate) and gender (\"feminine\" or \"masculine\", whichever the character is).")
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,

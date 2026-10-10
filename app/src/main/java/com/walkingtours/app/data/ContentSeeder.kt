@@ -190,8 +190,9 @@ class ContentSeeder(
          * the Room schema version — that is separate.
          *
          * 14: photographs moved from JPEG to WebP, so every photoAsset path changed.
+         * 15: tour titles no longer repeat the city — the cards already name it.
          */
-        const val CONTENT_VERSION = "14"
+        const val CONTENT_VERSION = "15"
         const val KEY_VERSION = "content_version"
 
         /** File names already seeded, so they are not read and parsed again on later launches. */

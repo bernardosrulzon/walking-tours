@@ -13,6 +13,9 @@ entranceFeeTry, entranceFeeNote, isFree, openingHours, accessibility, insiderTip
 nextStopDirections, photoAsset, photoAttribution, photoSourceUrl, triggerRadiusMeters).
 
 - Stop ids are kebab-case and unique across ALL tours, not just within one.
+- `title` never repeats the city — the card and the tour page already name it. Write "Taj Mahal at
+  Sunrise, Fort & River Sunset", not "Agra – Taj Mahal at Sunrise, Fort & River Sunset". A district
+  that genuinely tells the tours apart ("Kowloon – Harbour to Night Market") may stay.
 - New files are picked up automatically on the next launch. Edits to an existing tour are NOT —
   bump `CONTENT_VERSION` in `ContentSeeder.kt` so devices re-seed.
 - `nextStopDirections` walks to the NEXT stop in order (or states the metro/funicular hop honestly).

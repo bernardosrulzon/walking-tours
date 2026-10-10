@@ -112,15 +112,6 @@ fun TourListScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                item {
-                    Text(
-                        text = "Put your earphones in, pick a walk, and let the app tell you what you " +
-                            "are looking at as you arrive.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
                 items(tours, key = { it.id }) { tour ->
                     val stopCount = stopCounts.firstOrNull { it.tourId == tour.id }?.stopCount ?: 0
                     TourCard(tour = tour, stopCount = stopCount, onClick = { onOpenTour(tour.id) })

@@ -11,8 +11,8 @@ is Android-restricted, so the app's own identity headers are sent on every reque
 app does (see ai/AiHttp.kt).
 
 Usage:
-    python3 tools/refresh_stop_coords.py            # dry run
-    python3 tools/refresh_stop_coords.py --write    # apply the best match to every stop
+    python3 tools/refresh_stop_coords.py [tour.json]      # dry run (default: istanbul.json)
+    python3 tools/refresh_stop_coords.py [tour.json] --write  # apply the best match to every stop
 """
 
 import json
@@ -24,7 +24,6 @@ import urllib.request
 from math import asin, cos, radians, sin, sqrt
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TOUR = ROOT / "app/src/main/assets/tours/istanbul.json"
 PROPS = ROOT / "local.properties"
 
 ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
@@ -34,30 +33,76 @@ FIELD_MASK = "places.displayName,places.formattedAddress,places.location"
 PACKAGE = "com.walkingtours.app"
 CERT = "70AC3E93DE37D579EA5E85264D2CC40E908C7870"
 
-# Rank matches near Sultanahmet so "Blue Mosque" cannot win a hit in another city.
-BIAS_CENTER = {"latitude": 41.0086, "longitude": 28.9802}
-BIAS_RADIUS_M = 3500.0
 
-# Stops whose Google match is a different thing from the stop the tour means, so the curated
-# coordinate is kept: Places returns the palace interior, the park's waterfront address, or a
-# neighbourhood/district centroid, while the tour deliberately arrives at a gate, the main entrance,
-# or the ferry piers. See each stop's narration and nextStopDirections before changing any of these.
-KEEP_CURATED = {
-    "topkapi-palace",  # Places: museum interior 360 m in. Tour: Bab-ı Hümayun gate and fountain.
-    "gulhane-park",    # Places: Kennedy Caddesi address. Tour: the main gate off the tram line.
-    "hoca-pasa",       # Places: neighbourhood centroid. Tour: the lanes behind Sirkeci station.
-    "eminonu",         # Places: district centroid. Tour: the waterfront and the ferry piers.
-}
+class TourConfig:
+    def __init__(self, bias_lat, bias_lng, bias_radius_m, keep_curated, query_overrides):
+        self.bias_center = {"latitude": bias_lat, "longitude": bias_lng}
+        self.bias_radius_m = bias_radius_m
+        self.keep_curated = keep_curated
+        self.query_overrides = query_overrides
 
-# A quicker, safer query per stop where the tour's own name is not what Places indexes.
-QUERY_OVERRIDES = {
-    "obelisk-of-constantine": "Walled Obelisk, Istanbul",
-    "serpentine-column": "Serpent Column, Istanbul",
-    "haseki-hurrem-baths": "Haseki Hürrem Sultan Hamamı, Istanbul",
-    "egyptian-bazaar": "Spice Bazaar, Istanbul",
-    "hagia-sophia": "Hagia Sophia, Istanbul",
-    "topkapi-palace": "Topkapı Palace, Istanbul",
-    "hoca-pasa": "Hoca Paşa, Fatih, Istanbul",
+
+TOURS = {
+    # Rank matches near Sultanahmet so "Blue Mosque" cannot win a hit in another city.
+    "istanbul.json": TourConfig(
+        41.0086, 28.9802, 3500.0,
+        # Stops whose Google match is a different thing from the stop the tour means, so the curated
+        # coordinate is kept: Places returns the palace interior, the park's waterfront address, or a
+        # neighbourhood/district centroid, while the tour deliberately arrives at a gate, the main
+        # entrance, or the ferry piers. See each stop's narration and nextStopDirections before
+        # changing any of these.
+        keep_curated={
+            "topkapi-palace",  # Places: museum interior 360 m in. Tour: Bab-ı Hümayun gate and fountain.
+            "gulhane-park",    # Places: Kennedy Caddesi address. Tour: the main gate off the tram line.
+            "hoca-pasa",       # Places: neighbourhood centroid. Tour: the lanes behind Sirkeci station.
+            "eminonu",         # Places: district centroid. Tour: the waterfront and the ferry piers.
+        },
+        # A quicker, safer query per stop where the tour's own name is not what Places indexes.
+        query_overrides={
+            "obelisk-of-constantine": "Walled Obelisk, Istanbul",
+            "serpentine-column": "Serpent Column, Istanbul",
+            "haseki-hurrem-baths": "Haseki Hürrem Sultan Hamamı, Istanbul",
+            "egyptian-bazaar": "Spice Bazaar, Istanbul",
+            "hagia-sophia": "Hagia Sophia, Istanbul",
+            "topkapi-palace": "Topkapı Palace, Istanbul",
+            "hoca-pasa": "Hoca Paşa, Fatih, Istanbul",
+        },
+    ),
+    # Biased tight on the palace itself: these are rooms, gates and terraces inside one complex,
+    # and an unbiased query would happily return a namesake elsewhere.
+    "topkapi-palace.json": TourConfig(
+        41.0115, 28.9833, 1200.0,
+        keep_curated={
+            # Google's only Bab-ı Hümayun pin sits 550 m south of the palace in the wrong area;
+            # confirmed with a second query. The curated point stands until verified on site.
+            "imperial-gate",
+            # No Babüsselam POI exists (closest hit is a café 2.7 km away); the other hits are a
+            # different gate and the museum centroid.
+            "gate-of-salutation",
+            # The "Harem Units" pin lands ~200 m NW of the Harem complex footprint, off its
+            # Third Court side; the curated arrival point is the safer bet.
+            "harem",
+            # "Treasury" pin sits on the west side while the visited treasury is the Third Court
+            # east-side pavilion the curated point already marks; 141 m apart, wrong direction.
+            "imperial-treasury",
+            # Both points straddle the chamber with no way to tell which side is right; the
+            # curated point stays.
+            "audience-chamber",
+            # Both hits are Sirkeci rooftop bars, 600+ m away — a different thing entirely.
+            "bosphorus-terrace",
+        },
+        query_overrides={
+            "imperial-gate": "Bab-ı Hümayun, Istanbul",
+            "gate-of-salutation": "Babüsselam Gate, Topkapı Palace",
+            "harem": "Harem, Topkapı Palace, Istanbul",
+            "imperial-treasury": "Imperial Treasury, Topkapı Palace, Istanbul",
+            "audience-chamber": "Arz Odası, Topkapı Palace, Istanbul",
+            "bosphorus-terrace": "Topkapı Palace terrace Bosphorus view",
+            "tower-of-justice": "Adalet Kulesi, Topkapı Palace, Istanbul",
+            "palace-kitchens": "Palace Kitchens, Topkapı Palace, Istanbul",
+            "hagia-irene": "Hagia Irene, Istanbul",
+        },
+    ),
 }
 
 
@@ -76,13 +121,13 @@ def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * asin(min(1.0, sqrt(a)))
 
 
-def search(key: str, query: str) -> list[dict]:
+def search(key: str, query: str, config: TourConfig) -> list[dict]:
     body = json.dumps(
         {
             "textQuery": query,
             "maxResultCount": 5,
             "languageCode": "en",
-            "locationBias": {"circle": {"center": BIAS_CENTER, "radius": BIAS_RADIUS_M}},
+            "locationBias": {"circle": {"center": config.bias_center, "radius": config.bias_radius_m}},
         }
     ).encode()
     request = urllib.request.Request(
@@ -126,18 +171,24 @@ def patch(text: str, stop_id: str, lat: float, lng: float) -> str:
 
 
 def main() -> None:
+    args = [a for a in sys.argv[1:] if a != "--write"]
     write = "--write" in sys.argv
+    tour_name = args[0] if args else "istanbul.json"
+    if tour_name not in TOURS:
+        raise SystemExit(f"Unknown tour {tour_name!r}; known: {sorted(TOURS)}")
+    config = TOURS[tour_name]
+    tour_path = ROOT / "app/src/main/assets/tours" / tour_name
     key = load_key()
-    root = json.loads(TOUR.read_text())
+    root = json.loads(tour_path.read_text())
     stops = root["stops"]
-    text = TOUR.read_text()
+    text = tour_path.read_text()
 
     picks: list[tuple[dict, dict]] = []
     for stop in stops:
-        query = QUERY_OVERRIDES.get(stop["id"], f'{stop["name"]}, Istanbul')
+        query = config.query_overrides.get(stop["id"], f'{stop["name"]}, Istanbul')
         print(f'{stop["order"]:>2}  {stop["name"]}')
         print(f'    now  {stop["lat"]:.6f}, {stop["lng"]:.6f}   ({query})')
-        places = search(key, query)
+        places = search(key, query, config)
         if not places:
             print("    no match — left unchanged")
             continue
@@ -152,16 +203,15 @@ def main() -> None:
             )
             if rank == 1:
                 print(f'          {address}')
-        if stop["id"] in KEEP_CURATED:
-            print("    kept  curated coordinate (Places match is a different thing; see KEEP_CURATED)")
+        if stop["id"] in config.keep_curated:
+            print("    kept  curated coordinate (Places match is a different thing; see TOURS config)")
         else:
             picks.append((stop, places[0]))
         print()
 
     if not write:
         print(
-            f"Dry run only. {len(picks)} stops would be updated, "
-            f"{len(KEEP_CURATED)} kept curated. Re-run with --write to apply."
+            f"Dry run only. {len(picks)} stops would be updated. Re-run with --write to apply."
         )
         return
 
@@ -170,8 +220,8 @@ def main() -> None:
         text = patch(text, stop["id"], location["latitude"], location["longitude"])
     # Fail loudly rather than write a broken asset: the patch edits text, not a parsed document.
     json.loads(text)
-    TOUR.write_text(text)
-    print(f"Updated {len(picks)} stops in {TOUR.relative_to(ROOT)}; kept {len(KEEP_CURATED)} curated.")
+    tour_path.write_text(text)
+    print(f"Updated {len(picks)} stops in {tour_path.relative_to(ROOT)}.")
 
 
 if __name__ == "__main__":

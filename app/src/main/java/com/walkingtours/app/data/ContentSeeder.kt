@@ -129,7 +129,7 @@ class ContentSeeder(
          * Bump whenever the bundled JSON changes, so an already-seeded device re-imports it. Not
          * the Room schema version — that is separate.
          */
-        const val CONTENT_VERSION = "2"
+        const val CONTENT_VERSION = "5"
         const val KEY_VERSION = "content_version"
     }
 }

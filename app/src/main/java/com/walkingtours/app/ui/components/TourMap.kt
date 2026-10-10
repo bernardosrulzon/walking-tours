@@ -857,6 +857,19 @@ fun MapsWarmUp(lat: Double?, lng: Double?, modifier: Modifier = Modifier) {
     }
     if (warmedUp) return
 
+    // And it waits for the screen to stop moving first, exactly as [TourMap] does. This composable
+    // appears on the tour list, which the walker has just navigated *to*: building the map here at
+    // once put the heaviest work the app does — the first Google map in the process, a blocking
+    // round trip into Play Services — inside the arrival transition, which is the stutter this
+    // warm-up exists to prevent. A little after the transition it is just as warm, and nothing on
+    // screen is waiting for it.
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(MAP_SETTLE_MS)
+        settled = true
+    }
+    if (!settled) return
+
     Log.i(TAG, "Map: warming the engine up")
 
     val cameraPositionState = rememberCameraPositionState {

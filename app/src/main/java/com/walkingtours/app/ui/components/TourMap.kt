@@ -162,11 +162,25 @@ private const val GOOGLE_FOCUS_PADDING_Y_DP = 16
 /**
  * How long a map waits before its engine is built, in milliseconds.
  *
- * A little longer than the host's transitions take (300 ms), so that the heaviest thing on these
- * screens is never built while the screen is moving. The map's place is held by an empty panel of
- * its own size in the meantime.
+ * The rule is that the heaviest thing on these screens — the map engine — is never built while the
+ * screen is moving. The first cut of this delay was 340 ms, just past the 300 ms transitions. Frame
+ * traces from a real phone then showed why that was not enough: building the engine blocks the UI
+ * thread for about 110 ms (Google Maps' own work, on a Galaxy S23), and at 340 ms it landed at ~470
+ * ms after the tap — right on the heels of the arrival, where it reads as the transition itself
+ * stuttering. 600 ms puts the build past the arrival, while the page sits still; the empty panel
+ * holds the map's place either way, so the wait costs a slightly later map and nothing else.
  */
-private const val MAP_SETTLE_MS = 340L
+private const val MAP_SETTLE_MS = 600L
+
+/**
+ * The warm-up map's own delay, deliberately shorter than [MAP_SETTLE_MS].
+ *
+ * The warm-up runs on the tour list, and its screen is not the transition the walker is watching —
+ * the list arriving is. It should be built just after that arrival, and done before the walker is
+ * likely to tap a tour (the list is one tap from a map screen). A longer delay leaves the warm-up
+ * still starting when they tap, so its map disposal would land inside the next transition.
+ */
+private const val WARM_UP_SETTLE_MS = 340L
 
 /**
  * How long the Google map has to attach before it is shown regardless.
@@ -862,10 +876,10 @@ fun MapsWarmUp(lat: Double?, lng: Double?, modifier: Modifier = Modifier) {
     // once put the heaviest work the app does — the first Google map in the process, a blocking
     // round trip into Play Services — inside the arrival transition, which is the stutter this
     // warm-up exists to prevent. A little after the transition it is just as warm, and nothing on
-    // screen is waiting for it.
+    // screen is waiting for it. Its own, shorter settle: see [WARM_UP_SETTLE_MS].
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(MAP_SETTLE_MS)
+        delay(WARM_UP_SETTLE_MS)
         settled = true
     }
     if (!settled) return

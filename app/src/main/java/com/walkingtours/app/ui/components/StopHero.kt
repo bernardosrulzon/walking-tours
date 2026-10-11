@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -91,14 +92,20 @@ fun StopHero(
                         awaitPointerEventScope {
                             while (true) {
                                 val event = awaitPointerEvent(PointerEventPass.Main)
-                                // Only single-pointer drags are claimed, which is what stops the
-                                // pager reading a one-finger pan as a page swipe.
+                                // Only single-pointer *movement* is claimed, which is what stops the
+                                // pager reading a one-finger pan as a page swipe. Consuming the whole
+                                // stream claimed taps too, and a tap swallowed here never reaches a
+                                // child — the map's own controls, the map/satellite switch above all,
+                                // went dead on this page. A tap has no position change, so it stays
+                                // with the child that wants it.
                                 //
                                 // Two or more pointers mean a pinch, and a pinch belongs entirely to
                                 // the map: claiming it here swallowed the second finger before the
                                 // map ever saw it, so zoom did nothing. Multi-touch is left alone.
                                 if (event.changes.size == 1) {
-                                    event.changes.forEach { it.consume() }
+                                    event.changes.forEach { change ->
+                                        if (change.positionChanged()) change.consume()
+                                    }
                                 }
                             }
                         }

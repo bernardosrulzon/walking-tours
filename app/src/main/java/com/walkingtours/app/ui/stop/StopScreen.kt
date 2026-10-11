@@ -23,11 +23,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
@@ -46,7 +48,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +71,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,8 +82,13 @@ import com.walkingtours.app.audio.NarrationState
 import com.walkingtours.app.data.db.StopEntity
 import com.walkingtours.app.tour.TourEntry
 import com.walkingtours.app.tour.TourSessionManager
-import com.walkingtours.app.ui.chat.AskBar
 import com.walkingtours.app.ui.chat.ChatBottomSheet
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import com.walkingtours.app.ui.components.InfoCard
 import com.walkingtours.app.ui.components.InfoRow
 import com.walkingtours.app.ui.components.NarrationTransport
@@ -386,6 +393,21 @@ fun StopScreen(
     /** Play the stop on screen: the page is the stop, so this is the tour moving to it. */
     fun playThisStop(id: String) = session.playStop(id)
 
+    // Frosted-glass action bar, same as the tour details screen: the pages scroll under it, and
+    // Haze blurs whatever passes behind. Below Android 12 the blur falls back to a near-opaque
+    // surface tint.
+    val hazeState = rememberHazeState()
+    val barTint = MaterialTheme.colorScheme.surface
+    val barStyle = HazeBlurStyle {
+        blurRadius(24.dp)
+        colorEffects(
+            listOf(HazeColorEffect.tint(barTint.copy(alpha = 0.72f))),
+        )
+        fallbackColorEffect(
+            HazeColorEffect.tint(barTint.copy(alpha = 0.94f)),
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -431,13 +453,99 @@ fun StopScreen(
             )
         },
         bottomBar = {
-            AskBar(
-                placeholder = settledStop?.let { "Ask about ${it.name}" } ?: "Ask about this walk",
-                onClick = { showChat = true },
-            )
+            // Previous / Ask / Next: the tour details bar's frosted style, with the home
+            // screen's circular arrows on the sides and the assistant in the middle. The
+            // arrows drive the same pager the swipe does, so the neighbour slides in.
+            val currentPage = pagerState.currentPage
+            val pageCount = pagerState.pageCount
+            val canGoPrevious = currentPage > 0
+            val canGoNext = currentPage < pageCount - 1
+            fun goNext() {
+                if (!canGoNext) return
+                // Leaving the introduction hands control to the geofences first, exactly as
+                // its old Next button did; every other page just slides across.
+                if (stopIndexFor(currentPage) < 0) {
+                    session.skipIntroduction()
+                    pageScrollStates.getOrNull(currentPage + 1)?.let { next ->
+                        scope.launch { next.scrollTo(0) }
+                    }
+                }
+                moveToPage(currentPage + 1)
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeBlur(
+                        input = HazeInput.Sources(hazeState),
+                        style = barStyle,
+                    ),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clickable(enabled = canGoPrevious) { moveToPage(currentPage - 1) }
+                            .alpha(if (canGoPrevious) 1f else 0.38f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Previous stop",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showChat = true },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ask", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clickable(enabled = canGoNext) { goNext() }
+                            .alpha(if (canGoNext) 1f else 0.38f),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Next stop",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        // The pages draw under the frosted bar so it has something to blur. The bar's height
+        // comes back as trailing space at the bottom of each page so the last card can still
+        // scroll clear of it.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding())
+                .hazeSource(hazeState),
+        ) {
             // The pager is composed even before it is on the right page, because the landing is a
             // scroll and a scroll needs a laid-out pager to move. It is simply not drawn until the
             // landing has been applied: page zero is the introduction, and showing that under a walker
@@ -626,32 +734,6 @@ fun StopScreen(
                         }
                     }
 
-                    // ---- Moving on to stop one ----------------------------------------------------
-                    // At the end of the page and in the stop footer's style: a Column with the same
-                    // 16 dp inset, a divider, and a full-width button. The introduction runs for
-                    // minutes, so there has to be a way past it.
-                    if (stopIndex < 0) {
-                        Column(Modifier.padding(16.dp)) {
-                            HorizontalDivider()
-                            Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    // Skipping the introduction hands control to the geofences, then
-                                    // shows stop one. Settling on its page starts it, which is what
-                                    // stops the walker being left on the introduction.
-                                    session.skipIntroduction()
-                                    // Stop one is a page of its own now: land at its top, the way
-                                    // arriving at any stop does.
-                                    pageScrollStates.getOrNull(page + 1)?.let { next -> scope.launch { next.scrollTo(0) } }
-                                    moveToPage(page + 1)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Next")
-                            }
-                        }
-                    }
-
                     // ---- This stop ------------------------------------------------------------------
                     pageStop?.let { current ->
                         Column(
@@ -834,45 +916,9 @@ fun StopScreen(
                             }
                         }
 
-                        Column(Modifier.padding(16.dp)) {
-                            Spacer(Modifier.height(16.dp))
-                            HorizontalDivider()
-                            Spacer(Modifier.height(12.dp))
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                OutlinedButton(
-                                    // On stop one while a tour with an introduction is running
-                                    // this is enabled, and leads back to the introduction page.
-                                    onClick = { moveToPage(previousPage) },
-                                    enabled = previousPage >= 0,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Previous", maxLines = 1)
-                                }
-                                OutlinedButton(
-                                    onClick = { moveToPage(page + 1) },
-                                    enabled = nextInRoute != null,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("Next", maxLines = 1)
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
-                            }
-
-                        }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    // Clears the frosted bar that floats over the end of the page.
+                    Spacer(Modifier.height(innerPadding.calculateBottomPadding() + 8.dp))
                 }
             }
 

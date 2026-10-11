@@ -422,10 +422,7 @@ private fun MapStyleToggle(modifier: Modifier = Modifier) {
     val satellite = satelliteImagery.value
     FilledIconButton(
         onClick = { satelliteImagery.value = !satellite },
-        // A full 48 dp touch target, not the 36 dp it used to be: anything smaller and taps
-        // near the edge fall through to the map underneath, which swallows them — the button
-        // then only answers to dead-centre hits.
-        modifier = modifier.size(48.dp),
+        modifier = modifier.size(36.dp),
         colors = IconButtonDefaults.filledIconButtonColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -434,7 +431,7 @@ private fun MapStyleToggle(modifier: Modifier = Modifier) {
         Icon(
             imageVector = if (satellite) Icons.Filled.Map else Icons.Filled.Satellite,
             contentDescription = if (satellite) "Show street map" else "Show satellite imagery",
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }

@@ -637,100 +637,105 @@ fun StopScreen(
                     // It stays here for the whole tour, not just while it is speaking: stop one's
                     // Previous leads back to it, and the transport lets the walker hear it again.
                     if (stopIndex < 0) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        Column(
+                            Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                // A little air under the photograph or map, so the title reads as a
+                                // separate block rather than as a caption printed on the image.
+                                top = 20.dp,
+                            ),
                         ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Before you set off",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                        Text(
-                                            text = "Introduction to the walk",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
-                                    // Same tuning as a stop: change the guide/interests, or leave quick
-                                    // feedback that rewrites this introduction too.
-                                    IconButton(onClick = { showTune = true }) {
-                                        Icon(Icons.Filled.Tune, contentDescription = "Tune the introduction")
-                                    }
-                                }
-                                Spacer(Modifier.height(12.dp))
-                                if (TourSessionManager.OVERVIEW_ID in guideLoading) {
-                                    LoadingContent()
-                                } else {
-                                    NarrationTransport(
-                                        state = if (overviewPlaying) narration.state else NarrationState.IDLE,
-                                        positionMs = if (overviewPlaying) narration.positionMs else 0L,
-                                        durationMs = if (overviewPlaying) narration.durationMs else 0L,
-                                        rate = narration.rate,
-                                        onPlayPause = {
-                                            if (overviewPlaying && isPlaying) {
-                                                session.pauseNarration()
-                                            } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
-                                                session.resumeNarration()
-                                            } else {
-                                                session.playOverview()
-                                            }
-                                        },
-                                        onRewind = { session.skipNarrationBy(-15_000) },
-                                        onForward = { session.skipNarrationBy(15_000) },
-                                        // The neighbouring page, exactly as on a stop page. It used to
-                                        // ask the session for state.nextStop, but during the
-                                        // introduction there is no current stop for that to be
-                                        // relative to, so it answered with whatever stop came next in
-                                        // its own bookkeeping and the button jumped deep into the
-                                        // tour — stop nine, in the owner's case. On the introduction,
-                                        // "next" can only mean the page after it.
-                                        onPrevious = { moveToPage(page - 1) },
-                                        onNext = { moveToPage(page + 1) },
-                                        onSeekFraction = { fraction ->
-                                            session.seekNarrationTo((fraction * narration.durationMs).toLong())
-                                        },
-                                        onRateChange = { session.setNarrationRate(it) },
-                                        message = if (overviewPlaying) narration.message else null,
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Before you set off",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
-                                    Spacer(Modifier.height(6.dp))
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { transcriptOpen = !transcriptOpen },
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = "Transcript",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        Icon(
-                                            imageVector = if (transcriptOpen) {
-                                                Icons.Filled.ExpandLess
-                                            } else {
-                                                Icons.Filled.ExpandMore
-                                            },
-                                            contentDescription = if (transcriptOpen) {
-                                                "Hide transcript"
-                                            } else {
-                                                "Show transcript"
-                                            },
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    if (transcriptOpen) {
-                                        Spacer(Modifier.height(8.dp))
-                                        Transcript(
-                                            text = guideText(TourSessionManager.OVERVIEW_ID, state.overviewText),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                        )
-                                    }
+                                    Text(
+                                        text = "Introduction to the walk",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                                // Same tuning as a stop: change the guide/interests, or leave quick
+                                // feedback that rewrites this introduction too.
+                                IconButton(onClick = { showTune = true }) {
+                                    Icon(Icons.Filled.Tune, contentDescription = "Tune the introduction")
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            if (TourSessionManager.OVERVIEW_ID in guideLoading) {
+                                LoadingContent()
+                            } else {
+                                NarrationTransport(
+                                    state = if (overviewPlaying) narration.state else NarrationState.IDLE,
+                                    positionMs = if (overviewPlaying) narration.positionMs else 0L,
+                                    durationMs = if (overviewPlaying) narration.durationMs else 0L,
+                                    rate = narration.rate,
+                                    onPlayPause = {
+                                        if (overviewPlaying && isPlaying) {
+                                            session.pauseNarration()
+                                        } else if (overviewPlaying && narration.state == NarrationState.PAUSED) {
+                                            session.resumeNarration()
+                                        } else {
+                                            session.playOverview()
+                                        }
+                                    },
+                                    onRewind = { session.skipNarrationBy(-15_000) },
+                                    onForward = { session.skipNarrationBy(15_000) },
+                                    // The neighbouring page, exactly as on a stop page. It used to
+                                    // ask the session for state.nextStop, but during the
+                                    // introduction there is no current stop for that to be
+                                    // relative to, so it answered with whatever stop came next in
+                                    // its own bookkeeping and the button jumped deep into the
+                                    // tour — stop nine, in the owner's case. On the introduction,
+                                    // "next" can only mean the page after it.
+                                    onPrevious = { moveToPage(page - 1) },
+                                    onNext = { moveToPage(page + 1) },
+                                    onSeekFraction = { fraction ->
+                                        session.seekNarrationTo((fraction * narration.durationMs).toLong())
+                                    },
+                                    onRateChange = { session.setNarrationRate(it) },
+                                    message = if (overviewPlaying) narration.message else null,
+                                )
+                            }
+                        }
+
+                        if (TourSessionManager.OVERVIEW_ID !in guideLoading) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { transcriptOpen = !transcriptOpen },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = "Transcript",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = if (transcriptOpen) {
+                                            Icons.Filled.ExpandLess
+                                        } else {
+                                            Icons.Filled.ExpandMore
+                                        },
+                                        contentDescription = if (transcriptOpen) {
+                                            "Hide transcript"
+                                        } else {
+                                            "Show transcript"
+                                        },
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (transcriptOpen) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Transcript(
+                                        text = guideText(TourSessionManager.OVERVIEW_ID, state.overviewText),
+                                    )
                                 }
                             }
                         }

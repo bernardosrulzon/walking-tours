@@ -43,7 +43,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 adb install -r -g app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Install the **debug** build. That's not laziness: the Google keys are bound to the debug signing fingerprint, and a release build looks like a different app to Google, which then sulks.
+Install the **debug** build. That's not laziness: the Google keys are bound to the debug signing fingerprint. Release builds are signed with that same debug key "for now" (see `app/build.gradle.kts`), so they work too — and run noticeably smoother — but anything signed with another key looks like a different app to Google, which then sulks.
 
 ## Keys are optional — and yours
 

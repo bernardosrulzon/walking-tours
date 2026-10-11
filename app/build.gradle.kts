@@ -58,6 +58,14 @@ android {
 
     buildTypes {
         release {
+            // "For now": signed with the debug keystore. Two reasons. The Google API keys in
+            // local.properties are restricted to the debug signing fingerprint (see README), so a
+            // release build signed with anything else loses Maps and the cloud voice; and with the
+            // debug signature it installs straight over a debug build on a test device — same key,
+            // no uninstall, progress kept. Replace this with a real upload key before anything
+            // ships to a store, and re-restrict the Google keys to it.
+            signingConfig = signingConfigs.getByName("debug")
+
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

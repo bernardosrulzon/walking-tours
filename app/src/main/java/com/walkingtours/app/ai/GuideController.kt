@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "11"
+const val NARRATION_PROMPT_VERSION = "12"
 
 fun guideSignature(
     guide: Guide?,
@@ -402,6 +402,9 @@ class GuideController(
         appendLine("of noticing, not a costume: speak as the character would, and let the performance serve")
         appendLine("the place rather than itself. Never force a joke, an accent tic or a catchphrase where it")
         appendLine("does not belong, and never let the act bury the facts.")
+        appendLine("Keep the delivery calm and measured: conversational, never theatrical, melodramatic")
+        appendLine("or breathless. Underplay rather than perform — no whispered conspiracies, no swelling")
+        appendLine("climaxes, no cliffhangers.")
         appendLine()
         appendLine("Hold every part to this bar: when the stop ends, the walker should feel they learned")
         appendLine("something real — a mechanism, a belief, a tension, a story that reframes the place. That")
@@ -425,11 +428,11 @@ class GuideController(
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
-        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
-        appendLine("  teller would — never a tag in every sentence.")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
+        appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
         appendLine()
         appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
-        appendLine("the mood of this stop (for example \"dry and conspiratorial, unhurried\").")
+        appendLine("the mood of this stop (for example \"calm and conversational, unhurried\").")
         appendLine()
         appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
@@ -710,6 +713,7 @@ class GuideController(
         }
         appendLine("The place comes first: stay with this country and city, never drift into general travel")
         appendLine("advice. Where people disagree, say so in one breath; never take a side, never dunk.")
+        appendLine("Keep the delivery calm and measured: conversational, never theatrical or melodramatic.")
         appendLine()
         appendLine("Hold this bar: when it ends, the walker should feel they learned something real. Cut")
         appendLine("platitudes (generic wonder, adjectives standing in for observation) and throat-clearing")
@@ -723,8 +727,8 @@ class GuideController(
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
-        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them sparingly, only where a real")
-        appendLine("  teller would — never a tag in every sentence.")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
+        appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
         appendLine()
         appendLine("Also give a sustained style direction for the whole delivery, matching this voice and")
         appendLine("the mood of the subject (for example \"warm and unhurried\").")

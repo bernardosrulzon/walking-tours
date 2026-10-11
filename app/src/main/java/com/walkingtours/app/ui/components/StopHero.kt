@@ -15,6 +15,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -87,26 +89,41 @@ fun StopHero(
                 // event by the time this runs; claiming it at the Main pass then hides it from the
                 // pager above, which is what stops a two-finger zoom being read as a page swipe.
                 // Swipes that begin anywhere else on the page are untouched and still change stop.
+                //
+                // Claimed only past touch slop: a tap always carries a pixel or two of jitter, and
+                // consuming any part of it cancels the tap of the child under it — which is what
+                // made the map/satellite switch answer only perfectly still presses on this page.
+                // Anything released before slop is a tap and is left alone; a real drag crosses
+                // slop, and from there every move is claimed so the pager never sees a swipe.
                 Box(
                     modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                        awaitPointerEventScope {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val slopSq = viewConfiguration.touchSlop.let { it * it }
+                            var draggedSq = 0f
+                            var dragging = false
                             while (true) {
                                 val event = awaitPointerEvent(PointerEventPass.Main)
-                                // Only single-pointer *movement* is claimed, which is what stops the
-                                // pager reading a one-finger pan as a page swipe. Consuming the whole
-                                // stream claimed taps too, and a tap swallowed here never reaches a
-                                // child — the map's own controls, the map/satellite switch above all,
-                                // went dead on this page. A tap has no position change, so it stays
-                                // with the child that wants it.
-                                //
-                                // Two or more pointers mean a pinch, and a pinch belongs entirely to
-                                // the map: claiming it here swallowed the second finger before the
-                                // map ever saw it, so zoom did nothing. Multi-touch is left alone.
-                                if (event.changes.size == 1) {
-                                    event.changes.forEach { change ->
-                                        if (change.positionChanged()) change.consume()
-                                    }
+                                // Two or more pointers mean a pinch, and a pinch belongs entirely
+                                // to the map: claiming it here swallowed the second finger before
+                                // the map ever saw it, so zoom did nothing. Multi-touch is left
+                                // alone.
+                                if (event.changes.size != 1) break
+                                val change = event.changes[0]
+                                // Finger lifted or gesture cancelled: a tap never reaches slop, so
+                                // there is nothing to unclaim.
+                                if (!change.pressed) break
+                                if (!dragging) {
+                                    // Keep the down and the tap jitter for the tap detectors
+                                    // below: consuming any part of a tap cancels it, and a tap
+                                    // swallowed here never reaches a child — the map's own
+                                    // controls, the map/satellite switch above all, went dead on
+                                    // this page.
+                                    val delta = change.position - change.previousPosition
+                                    draggedSq += delta.x * delta.x + delta.y * delta.y
+                                    dragging = draggedSq > slopSq
                                 }
+                                if (dragging && change.positionChanged()) change.consume()
                             }
                         }
                     },

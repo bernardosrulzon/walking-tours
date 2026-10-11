@@ -2,6 +2,7 @@ package com.walkingtours.app.ui.detour
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -438,6 +439,9 @@ fun DetourTopicsSheet(
 
                 else -> {
                     topics!!.forEach { topic ->
+                        // The sheet itself is surfaceContainerLow (the ModalBottomSheet default),
+                        // so a card in the same colour is invisible. surfaceContainerHigh plus an
+                        // outlineVariant border keeps every topic reading as a box, light or dark.
                         Card(
                             onClick = { onPick(topic) },
                             modifier = Modifier
@@ -445,8 +449,9 @@ fun DetourTopicsSheet(
                                 .padding(vertical = 4.dp),
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                             ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Text(

@@ -569,6 +569,7 @@ fun StopScreen(
                 val isCurrentStop = pageStopId != null && pageStopId == state.currentStopId
                 val highlightApplies = isCurrentStop && narration.stopId == pageStopId
                 val previousPage = page - 1
+                val previousInRoute = pageStops.getOrNull(stopIndex - 1)
                 val nextInRoute = pageStops.getOrNull(stopIndex + 1)
 
                 // The page keeps its scroll position for as long as the screen is open; the
@@ -612,16 +613,17 @@ fun StopScreen(
                         // Tapping a stop on the map is the same move as swiping to its page; the
                         // settled page is what makes it current.
                         onOpenStop = { tapped -> pageForStop(tapped.id)?.let { moveToPage(it) } },
-                        // Frame this stop and the next one rather than the entire route: the useful
-                        // question on a stop page is "where do I go next", not "where does this walk
-                        // go in total". The same two stops are the line's path, so the page draws one
-                        // leg rather than the whole itinerary.
+                        // Frame the previous stop, this one and the next one rather than the entire
+                        // route: the useful questions on a stop page are "where did I come from" and
+                        // "where do I go next", not "where does this walk go in total". The same three
+                        // stops are the line's path, so the page draws two legs rather than the whole
+                        // itinerary.
                         // The whole route while the introduction is what is showing: there is no
                         // "next stop" yet, and the tour as a whole is what the introduction is about.
                         focusStops = if (stopIndex < 0) {
                             null
                         } else {
-                            listOfNotNull(pageStop, nextInRoute)
+                            listOfNotNull(previousInRoute, pageStop, nextInRoute)
                         },
                         // The fence is the next stop's: the ground whose arrival the walker is
                         // walking into. On the introduction there is no next stop to fence.

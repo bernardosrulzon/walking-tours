@@ -407,7 +407,11 @@ private object EsriWorldImagery : OnlineTileSourceBase(
 }
 
 /**
- * The map/satellite switch, floating over the map's top-right corner.
+ * The map/satellite switch, floating over the map's bottom-right corner.
+ *
+ * Bottom-right, not top: the stop hero's Photo / Map chips own the top-right corner of that map,
+ * and two controls stacked there would fight for the same tap. The bottom-left belongs to the map
+ * engines' own attribution and logo.
  *
  * The icon shows the layer it would switch to — a satellite while the street map is up, a map while
  * the imagery is — so the button always says what the next tap does. Both engines honour the shared
@@ -545,7 +549,7 @@ fun TourMap(
                 onStopClick = onStopClick,
             )
             MapStyleToggle(
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
             )
         }
         return
@@ -920,7 +924,7 @@ fun TourMap(
                 .onSizeChanged { fitToViewport(it) },
         )
         MapStyleToggle(
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
         )
     }
 }

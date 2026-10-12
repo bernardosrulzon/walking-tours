@@ -41,7 +41,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ThumbsUpDown
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -375,7 +375,6 @@ fun StopScreen(
     val tuningIntro = tunedStop == null && introPages > 0
     if (showTune && (tunedStop != null || tuningIntro)) {
         TuneStopSheet(
-            stopName = tunedStop?.name ?: "the introduction",
             initialTone = persona.tone(tourId).orEmpty(),
             onApply = { note ->
                 showTune = false
@@ -666,7 +665,10 @@ fun StopScreen(
                                 // Same tuning as a stop: change the guide/interests, or leave quick
                                 // feedback that rewrites this introduction too.
                                 IconButton(onClick = { showTune = true }) {
-                                    Icon(Icons.Filled.Tune, contentDescription = "Tune the introduction")
+                                    Icon(
+                                        Icons.Filled.ThumbsUpDown,
+                                        contentDescription = "Tune your guide",
+                                    )
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
@@ -781,7 +783,10 @@ fun StopScreen(
                                 // Tune the telling for this walk: change the guide or interests, or
                                 // leave quick feedback ("more direct, fewer jokes").
                                 IconButton(onClick = { showTune = true }) {
-                                    Icon(Icons.Filled.Tune, contentDescription = "Tune this stop")
+                                    Icon(
+                                        Icons.Filled.ThumbsUpDown,
+                                        contentDescription = "Tune your guide",
+                                    )
                                 }
                             }
                             Spacer(Modifier.height(6.dp))
@@ -951,13 +956,12 @@ fun StopScreen(
 }
 
 /**
- * Per-stop tuning: change the guide or the walker's interests, or leave quick feedback that the
- * guide folds into every rewrite for this tour.
+ * Guide tuning: change the guide or the walker's interests, or leave quick feedback that the
+ * guide folds into every rewrite for this tour. Tour-wide, not per-stop — the title says so.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TuneStopSheet(
-    stopName: String,
     initialTone: String,
     onApply: (String) -> Unit,
     onChangeGuide: () -> Unit,
@@ -986,7 +990,7 @@ private fun TuneStopSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
             Text(
-                text = "Tune $stopName",
+                text = "Tune your guide",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )

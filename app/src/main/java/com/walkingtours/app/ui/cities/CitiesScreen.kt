@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
+import com.walkingtours.app.data.db.TourEntity
 import com.walkingtours.app.ui.components.AssetPhoto
 import com.walkingtours.app.util.CountryFlags
 
@@ -67,6 +68,12 @@ import com.walkingtours.app.util.CountryFlags
 private object CitiesMemory {
     val listState = LazyListState()
     var country: String? by mutableStateOf(null)
+    /**
+     * Last full tour list. Re-collecting the Room flow starts from [initialValue], so without
+     * this every return would flash an empty list — and an empty-then-full flash is exactly
+     * what drops the list position. Seeding from the cache means the list never goes empty.
+     */
+    var tours: List<TourEntity> = emptyList()
 }
 
 /**
@@ -83,8 +90,12 @@ fun CitiesScreen(
 
     LaunchedEffect(Unit) { repository.ensureContentLoaded() }
 
-    val tours by remember { repository.observeTours() }
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val freshTours by remember { repository.observeTours() }
+        .collectAsStateWithLifecycle(initialValue = CitiesMemory.tours)
+    LaunchedEffect(freshTours) {
+        if (freshTours.isNotEmpty()) CitiesMemory.tours = freshTours
+    }
+    val tours = freshTours.ifEmpty { CitiesMemory.tours }
 
     // Group the bundled tours into one card per city. The first tour's hero stands in for the
     // city, which is always right once a city's tours are photographed in the same place.

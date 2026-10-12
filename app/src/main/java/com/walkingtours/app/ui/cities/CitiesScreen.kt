@@ -7,24 +7,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -68,6 +73,7 @@ fun CitiesScreen(
     val cities = tours.groupBy { it.city }.toSortedMap()
     val countries = tours.map { it.country }.distinct().sorted()
     var selectedCountry by remember { mutableStateOf<String?>(null) }
+    var filterExpanded by remember { mutableStateOf(false) }
     val visible = if (selectedCountry == null) {
         cities
     } else {
@@ -103,28 +109,71 @@ fun CitiesScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            // One compact dropdown instead of a chip per country: at eighteen countries a chip
+            // row is a scroll marathon, while the menu shows everything in one tap.
             if (countries.size > 1) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 4.dp),
                 ) {
-                    item(key = "all") {
-                        FilterChip(
-                            selected = selectedCountry == null,
-                            onClick = { selectedCountry = null },
-                            label = { Text("All") },
-                        )
+                    val selectedFlag = selectedCountry?.let { CountryFlags.flag(it) }.orEmpty()
+                    OutlinedCard(
+                        onClick = { filterExpanded = true },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (selectedCountry == null) "🌍" else selectedFlag,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = selectedCountry ?: "All countries",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                        }
                     }
-                    items(countries, key = { it }) { country ->
-                        val flag = CountryFlags.flag(country)
-                        FilterChip(
-                            selected = selectedCountry == country,
+                    DropdownMenu(
+                        expanded = filterExpanded,
+                        onDismissRequest = { filterExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("🌍 All countries") },
                             onClick = {
-                                selectedCountry = if (selectedCountry == country) null else country
+                                selectedCountry = null
+                                filterExpanded = false
                             },
-                            label = { Text(if (flag.isEmpty()) country else "$flag $country") },
+                            trailingIcon = {
+                                if (selectedCountry == null) {
+                                    Icon(Icons.Filled.Check, contentDescription = null)
+                                }
+                            },
                         )
+                        countries.forEach { country ->
+                            val flag = CountryFlags.flag(country)
+                            DropdownMenuItem(
+                                text = { Text(if (flag.isEmpty()) country else "$flag $country") },
+                                onClick = {
+                                    selectedCountry = country
+                                    filterExpanded = false
+                                },
+                                trailingIcon = {
+                                    if (selectedCountry == country) {
+                                        Icon(Icons.Filled.Check, contentDescription = null)
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }

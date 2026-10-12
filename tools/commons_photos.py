@@ -7,12 +7,15 @@ tools/resize_photos.py. This script enforces the licence and size rules so a bad
 reach a commit by accident.
 
 Usage:
-  python3 tools/commons_photos.py search "<term>" [--limit 8]
+  python3 tools/commons_photos.py search "<term>" [--limit 3]
       List candidate files with licence, size and dimensions.
 
   python3 tools/commons_photos.py fetch "File:Name.jpg" <dest-stem> [--width 1600]
+                       [--tour <tour.json>] [--stop <stop-id>] [--hero]
       Verify the licence, download a raster at <= width, and write app/src/main/assets/photos/
-      <dest-stem>.jpg. Prints a ready-to-paste photoAttribution and photoSourceUrl.
+      <dest-stem>.jpg. With --tour/--stop it also patches that stop's photoAsset (the .webp name),
+      photoAttribution and photoSourceUrl in the tour JSON; --hero additionally sets tour.heroImage.
+      Without --tour it just prints a ready-to-paste photoAttribution and photoSourceUrl.
 
 Run tools/resize_photos.py --write afterwards: it converts the .jpg to the .webp the app draws
 and rewrites the JSON references.
@@ -98,7 +101,29 @@ def cmd_search(term: str, limit: int) -> None:
               f'{strip_html(meta.get("Artist", {}).get("value", ""))[:48]}')
 
 
-def cmd_fetch(title: str, dest: str, width: int) -> None:
+def apply_to_tour(tour_path: str, stop_id: str, dest: str, attribution: str, source_url: str, hero: bool) -> None:
+    """Write the photo fields into the tour JSON, keeping 2-space UTF-8 formatting."""
+    path = pathlib.Path(tour_path)
+    if not path.is_absolute():
+        path = ROOT / tour_path
+    data = json.loads(path.read_text())
+    asset = f"photos/{dest}.webp"
+    hit = False
+    for stop in data["stops"]:
+        if stop["id"] == stop_id:
+            stop["photoAsset"] = asset
+            stop["photoAttribution"] = attribution
+            stop["photoSourceUrl"] = source_url
+            hit = True
+    if not hit:
+        raise SystemExit(f"No stop '{stop_id}' in {path}")
+    if hero:
+        data["tour"]["heroImage"] = asset
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    print(f'patched {stop_id} -> {asset}' + (" (+heroImage)" if hero else ""))
+
+
+def cmd_fetch(title: str, dest: str, width: int, tour: str | None, stop: str | None, hero: bool) -> None:
     info = imageinfo(title, width)
     if info is None:
         raise SystemExit(f"Not a file on Commons: {title}")
@@ -123,10 +148,14 @@ def cmd_fetch(title: str, dest: str, width: int) -> None:
     artist = strip_html(meta.get("Artist", {}).get("value", "")) or "Unknown"
     page_url = info.get("descriptionurl") or f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
     print(f"wrote {dest_path.relative_to(ROOT)}  ({dest_path.stat().st_size // 1024} KB, {lic})")
-    print()
-    print(f'      "photoAsset": "photos/{dest}.webp",')
-    print(f'      "photoAttribution": "Photograph: {artist}, {lic}, via Wikimedia Commons",')
-    print(f'      "photoSourceUrl": "{page_url}"')
+    attribution = f"Photograph: {artist}, {lic}, via Wikimedia Commons"
+    if tour and stop:
+        apply_to_tour(tour, stop, dest, attribution, page_url, hero)
+    else:
+        print()
+        print(f'      "photoAsset": "photos/{dest}.webp",')
+        print(f'      "photoAttribution": "{attribution}",')
+        print(f'      "photoSourceUrl": "{page_url}"')
 
 
 def main() -> None:
@@ -134,16 +163,19 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     p_search = sub.add_parser("search")
     p_search.add_argument("term")
-    p_search.add_argument("--limit", type=int, default=8)
+    p_search.add_argument("--limit", type=int, default=3)
     p_fetch = sub.add_parser("fetch")
     p_fetch.add_argument("title")
     p_fetch.add_argument("dest")
     p_fetch.add_argument("--width", type=int, default=1600)
+    p_fetch.add_argument("--tour", default=None)
+    p_fetch.add_argument("--stop", default=None)
+    p_fetch.add_argument("--hero", action="store_true")
     args = parser.parse_args()
     if args.command == "search":
         cmd_search(args.term, args.limit)
     else:
-        cmd_fetch(args.title, args.dest, args.width)
+        cmd_fetch(args.title, args.dest, args.width, args.tour, args.stop, args.hero)
 
 
 if __name__ == "__main__":

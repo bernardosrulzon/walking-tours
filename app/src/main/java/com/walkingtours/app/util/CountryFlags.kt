@@ -12,11 +12,22 @@ object CountryFlags {
 
     private val flags = mapOf(
         "Azerbaijan" to "🇦🇿",
+        "Brasil" to "🇧🇷",
+        "Canada" to "🇨🇦",
         "China" to "🇨🇳",
         "China (Macao SAR)" to "🇲🇴",
+        "Greece" to "🇬🇷",
         "Hong Kong" to "🇭🇰",
         "India" to "🇮🇳",
+        "Indonesia" to "🇮🇩",
+        "Japan" to "🇯🇵",
+        "Malaysia" to "🇲🇾",
         "Nepal" to "🇳🇵",
+        "Philippines" to "🇵🇭",
+        "Singapore" to "🇸🇬",
+        "South Korea" to "🇰🇷",
+        "Taiwan" to "🇹🇼",
+        "Thailand" to "🇹🇭",
         "Türkiye" to "🇹🇷",
     )
 

@@ -82,8 +82,17 @@ def rewrite_references(rename, write):
 
 def main():
     write = "--write" in sys.argv[1:]
+    prefixes = None
+    for arg in sys.argv[1:]:
+        if arg.startswith("--prefix="):
+            prefixes = tuple(p for p in arg.split("=", 1)[1].split(",") if p)
     jpgs = sorted(PHOTOS.glob("*.jpg"))
     webps = sorted(PHOTOS.glob("*.webp"))
+    if prefixes:
+        # Restrict the pass to specific photo families (e.g. a batch's own stops), so an unrelated
+        # in-flight set elsewhere in the repo is not converted out from under its author.
+        jpgs = [f for f in jpgs if f.stem.startswith(prefixes)]
+        webps = [f for f in webps if f.stem.startswith(prefixes)]
     before = sum(f.stat().st_size for f in jpgs) + sum(f.stat().st_size for f in webps)
     after = 0
     rename = {}

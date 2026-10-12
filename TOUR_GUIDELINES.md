@@ -20,6 +20,9 @@ nextStopDirections, photoAsset, photoAttribution, photoSourceUrl, triggerRadiusM
   bump `CONTENT_VERSION` in `ContentSeeder.kt` so devices re-seed.
 - `nextStopDirections` walks to the NEXT stop in order (or states the metro/funicular hop honestly).
   The last stop gets a closing paragraph instead.
+- A tour that introduces a country the app has never shipped gets its flag too: add the
+  `"Country" to "🇽🇽"` entry in `util/CountryFlags.kt` alongside the tour, using the exact
+  `country` string from the JSON. A country with no entry gets no flag rather than a wrong one.
 
 ## 2. The voice
 
@@ -82,7 +85,9 @@ Two structural rules, learned the hard way:
 
 Every stop coordinate comes from the Google Places API (New), via `tools/refresh_stop_coords.py`,
 which searches, biases to the city, and prints each match with its distance from the current point
-so a human can judge. Rules:
+so a human can judge. For a new tour use the general `tools/tour_geo.py coords <tour>.json`, which
+biases Places to the tour's own footprint and needs no per-city config; `refresh_stop_coords.py`
+remains the specialised tool for the Istanbul tours. See `tools/README.md`. Rules:
 
 - Use the POI pin when it is an exact-name match for the thing the tour means.
 - Keep the curated point — and document why in the script's `keep_curated` — when Places returns
@@ -102,6 +107,8 @@ them against Google Maps. Haversine × 1.3 is how undercounts happen — it fail
 sites and hides un-walked legs. So:
 
 - Measure every leg with the Routes API (`travelMode: WALK`), sum the real distances and durations.
+  Google legally returns no route for **South Korea** and much of **mainland China**; `tools/tour_geo.py`
+  falls back to the Valhalla public pedestrian router there, and those legs are still measured walks.
 - A leg the tour rides or metros is still part of the totals; the directions present the ride as the
   recommended shortcut *against explicit on-foot numbers* ("5.1 km — about seventy minutes on foot
   along busy roads — so do not stroll it").
@@ -114,7 +121,8 @@ sites and hides un-walked legs. So:
 
 Wikimedia Commons only: public domain, CC BY or CC BY-SA. Never NC, never ND. Verify the license
 through the Commons API (`imageinfo`/`extmetadata`) BEFORE downloading, then download the best
-licensed version (at least 1080 px wide) and run `python3 tools/resize_photos.py --write`. The
+licensed version (at least 1080 px wide) and run `python3 tools/resize_photos.py --write`. `tools/commons_photos.py` enforces this — `search` lists licensed candidates with sizes, `fetch` refuses
+NC/ND and sub-1080 px files and patches the JSON fields for you. The
 script normalizes every photo to the 1080 px width the app actually draws (see `AssetPhoto`),
 converts it to WebP, and rewrites the `"photos/..."` references in the tour JSONs — never
 hand-resize or hand-rename a photo, the script is the only thing that touches that directory.

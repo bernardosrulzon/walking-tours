@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +33,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -61,6 +66,13 @@ fun CitiesScreen(
     // Group the bundled tours into one card per city. The first tour's hero stands in for the
     // city, which is always right once a city's tours are photographed in the same place.
     val cities = tours.groupBy { it.city }.toSortedMap()
+    val countries = tours.map { it.country }.distinct().sorted()
+    var selectedCountry by remember { mutableStateOf<String?>(null) }
+    val visible = if (selectedCountry == null) {
+        cities
+    } else {
+        cities.filterValues { cityTours -> cityTours.firstOrNull()?.country == selectedCountry }
+    }
 
     Scaffold(
         topBar = {
@@ -86,14 +98,44 @@ fun CitiesScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+        ) {
+            if (countries.size > 1) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                ) {
+                    item(key = "all") {
+                        FilterChip(
+                            selected = selectedCountry == null,
+                            onClick = { selectedCountry = null },
+                            label = { Text("All") },
+                        )
+                    }
+                    items(countries, key = { it }) { country ->
+                        val flag = CountryFlags.flag(country)
+                        FilterChip(
+                            selected = selectedCountry == country,
+                            onClick = {
+                                selectedCountry = if (selectedCountry == country) null else country
+                            },
+                            label = { Text(if (flag.isEmpty()) country else "$flag $country") },
+                        )
+                    }
+                }
+            }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(cities.entries.toList(), key = { it.key }) { (city, cityTours) ->
+            items(visible.entries.toList(), key = { it.key }) { (city, cityTours) ->
                 Card(
                     onClick = { onOpenCity(city) },
                     modifier = Modifier.fillMaxWidth(),
@@ -163,6 +205,7 @@ fun CitiesScreen(
                     )
                 }
             }
+        }
         }
     }
 }

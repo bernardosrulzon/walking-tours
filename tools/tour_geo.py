@@ -24,6 +24,7 @@ Usage:
 import json
 import pathlib
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -162,20 +163,80 @@ def cmd_coords(tour_path, root, stops, text, key, write, radius, bias, keep, ove
     print(f"Updated {len(picks)} stop coordinates in {tour_path.relative_to(ROOT)}.")
 
 
-def cmd_routes(tour_path, root, stops, text, key, write):
-    total_m = 0
-    total_s = 0
-    for a, b in zip(stops, stops[1:]):
-        body = {
+def valhalla_walk(a: dict, b: dict):
+    """Valhalla's public pedestrian router, via curl. Real foot route where Google will not go."""
+    body = json.dumps(
+        {
+            "locations": [
+                {"lat": a["lat"], "lon": a["lng"]},
+                {"lat": b["lat"], "lon": b["lng"]},
+            ],
+            "costing": "pedestrian",
+            "directions_options": {"units": "kilometers"},
+        }
+    )
+    try:
+        out = subprocess.run(
+            [
+                "curl", "-s", "--max-time", "25", "-X", "POST",
+                "https://valhalla1.openstreetmap.de/route",
+                "-H", "Content-Type: application/json", "-d", body,
+            ],
+            capture_output=True, text=True, timeout=45,
+        ).stdout
+        summary = json.loads(out)["trip"]["summary"]
+        return int(round(summary["length"] * 1000)), int(round(summary["time"])), "Valhalla"
+    except Exception:
+        return None
+
+
+def walk_route(a: dict, b: dict, key: str):
+    """Real walking route between two stops: Google Routes, with a Valhalla sanity check.
+
+    Google returns nothing for South Korea and much of mainland China (map-data restrictions), and
+    it can also return an *artifact* — a short hop routed the long way around an enclosed square or
+    a walled complex. So when Google's leg is implausibly long versus the straight line, Valhalla's
+    public pedestrian router is asked too and the more plausible of the two is used. Only if both
+    fail does the caller estimate.
+    """
+    straight = haversine_m(a["lat"], a["lng"], b["lat"], b["lng"])
+    google = None
+    result = post(
+        ROUTES_ENDPOINT,
+        key,
+        {
             "origin": {"location": {"latLng": {"latitude": a["lat"], "longitude": a["lng"]}}},
             "destination": {"location": {"latLng": {"latitude": b["lat"], "longitude": b["lng"]}}},
             "travelMode": "WALK",
             "languageCode": "en",
-        }
-        result = post(ROUTES_ENDPOINT, key, body, ROUTES_MASK)
-        routes = result.get("routes", [])
+        },
+        ROUTES_MASK,
+    )
+    routes = result.get("routes", [])
+    if routes:
+        route = routes[0]
+        google = (
+            route["distanceMeters"],
+            int(str(route.get("duration", "0s")).rstrip("s") or 0),
+            "Google",
+        )
+        if not straight or google[0] / straight <= ARTIFACT_RATIO:
+            return google
+
+    valhalla = valhalla_walk(a, b)
+    if google and valhalla:
+        use_valhalla = (not straight) or (valhalla[0] / straight) < (google[0] / straight)
+        return valhalla if use_valhalla else google
+    return google or valhalla
+
+
+def cmd_routes(tour_path, root, stops, text, key, write):
+    total_m = 0
+    total_s = 0
+    for a, b in zip(stops, stops[1:]):
         straight = haversine_m(a["lat"], a["lng"], b["lat"], b["lng"])
-        if not routes:
+        measured = walk_route(a, b, key)
+        if measured is None:
             est_m = round(straight * 1.3)
             est_s = round(est_m / 1.3)
             print(f'{a["order"]:>2}→{b["order"]:<2} {a["name"][:26]:<26} → {b["name"][:26]:<26} NO ROUTE — '
@@ -183,13 +244,11 @@ def cmd_routes(tour_path, root, stops, text, key, write):
             total_m += est_m
             total_s += est_s
             continue
-        route = routes[0]
-        meters = route["distanceMeters"]
-        seconds = int(str(route.get("duration", "0s")).rstrip("s") or 0)
+        meters, seconds, source = measured
         ratio = meters / straight if straight else 0
         flag = f"  <-- CHECK ×{ratio:.1f}" if ratio > ARTIFACT_RATIO else ""
         print(f'{a["order"]:>2}→{b["order"]:<2} {a["name"][:26]:<26} → {b["name"][:26]:<26} '
-              f'{meters:>6} m {seconds // 60:>3} min (straight {straight:.0f} m){flag}')
+              f'{meters:>6} m {seconds // 60:>3} min {source:<6} (straight {straight:.0f} m){flag}')
         total_m += meters
         total_s += seconds
 

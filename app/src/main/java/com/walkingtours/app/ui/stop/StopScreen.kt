@@ -563,9 +563,13 @@ fun StopScreen(
                 val stopIndex = stopIndexFor(page)
                 val pageStop = pageStops.getOrNull(stopIndex)
                 val pageStopId = pageStop?.id
-                // The transcript is collapsed by default: the audio is the point, and the page has
-                // plenty to say without it. Tapping the header opens it.
-                var transcriptOpen by remember(page) { mutableStateOf(false) }
+                // The transcript starts open when chapters do not play themselves: with no
+                // audio, the text is the point. Otherwise it starts collapsed — the audio is
+                // the point, and the page has plenty to say without it. Tapping the header
+                // always overrides; changing the setting re-applies the new default.
+                var transcriptOpen by remember(page, aiSettings.autoPlayChapters) {
+                    mutableStateOf(!aiSettings.autoPlayChapters)
+                }
                 val isCurrentStop = pageStopId != null && pageStopId == state.currentStopId
                 val highlightApplies = isCurrentStop && narration.stopId == pageStopId
                 val previousPage = page - 1

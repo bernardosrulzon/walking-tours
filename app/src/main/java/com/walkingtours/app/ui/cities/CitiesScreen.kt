@@ -45,7 +45,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +58,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ui.components.AssetPhoto
 import com.walkingtours.app.util.CountryFlags
+
+/**
+ * In-memory UI state for the home list. The same [LazyListState] object is reused on every
+ * composition, so leaving for a city and coming back lands exactly where the walker left off —
+ * there is no save/restore round-trip to lose the position.
+ */
+private object CitiesMemory {
+    val listState = LazyListState()
+    var country: String? by mutableStateOf(null)
+}
 
 /**
  * Entry level for a collection that grows beyond one walk: a card per city, each opening the list
@@ -81,12 +90,9 @@ fun CitiesScreen(
     // city, which is always right once a city's tours are photographed in the same place.
     val cities = tours.groupBy { it.city }.toSortedMap()
     val countries = tours.map { it.country }.distinct().sorted()
-    // Both survive the trip to a city and back: the back-stack entry keeps them while the
-    // city is on top, so returning lands exactly where the walker left off.
-    var selectedCountry by rememberSaveable { mutableStateOf<String?>(null) }
-    val listState = rememberSaveable(saver = LazyListState.Saver) {
-        LazyListState()
-    }
+    // The holder above outlives every composition, so both survive the trip to a city
+    // and back: returning lands exactly where the walker left off, filter included.
+    val listState = CitiesMemory.listState
     var filterExpanded by remember { mutableStateOf(false) }
     var filterFieldWidthPx by remember { mutableStateOf(0) }
     val filterArrowRotation by animateFloatAsState(
@@ -94,10 +100,10 @@ fun CitiesScreen(
         label = "filter-arrow",
     )
     val filterMenuScroll = rememberScrollState()
-    val visible = if (selectedCountry == null) {
+    val visible = if (CitiesMemory.country == null) {
         cities
     } else {
-        cities.filterValues { cityTours -> cityTours.firstOrNull()?.country == selectedCountry }
+        cities.filterValues { cityTours -> cityTours.firstOrNull()?.country == CitiesMemory.country }
     }
 
     Scaffold(
@@ -139,7 +145,7 @@ fun CitiesScreen(
                         .padding(top = 12.dp, bottom = 4.dp)
                         .onSizeChanged { filterFieldWidthPx = it.width },
                 ) {
-                    val selectedFlag = selectedCountry?.let { CountryFlags.flag(it) }.orEmpty()
+                    val selectedFlag = CitiesMemory.country?.let { CountryFlags.flag(it) }.orEmpty()
                     OutlinedCard(
                         onClick = { filterExpanded = true },
                         shape = RoundedCornerShape(16.dp),
@@ -152,12 +158,12 @@ fun CitiesScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = if (selectedCountry == null) "🌍" else selectedFlag,
+                                text = if (CitiesMemory.country == null) "🌍" else selectedFlag,
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = selectedCountry ?: "All countries",
+                                text = CitiesMemory.country ?: "All countries",
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
@@ -186,11 +192,11 @@ fun CitiesScreen(
                         DropdownMenuItem(
                             text = { Text("🌍 All countries") },
                             onClick = {
-                                selectedCountry = null
+                                CitiesMemory.country = null
                                 filterExpanded = false
                             },
                             trailingIcon = {
-                                if (selectedCountry == null) {
+                                if (CitiesMemory.country == null) {
                                     Icon(Icons.Filled.Check, contentDescription = null)
                                 }
                             },
@@ -200,11 +206,11 @@ fun CitiesScreen(
                             DropdownMenuItem(
                                 text = { Text(if (flag.isEmpty()) country else "$flag $country") },
                                 onClick = {
-                                    selectedCountry = country
+                                    CitiesMemory.country = country
                                     filterExpanded = false
                                 },
                                 trailingIcon = {
-                                    if (selectedCountry == country) {
+                                    if (CitiesMemory.country == country) {
                                         Icon(Icons.Filled.Check, contentDescription = null)
                                     }
                                 },

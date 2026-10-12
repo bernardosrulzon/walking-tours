@@ -191,8 +191,10 @@ class ContentSeeder(
          *
          * 14: photographs moved from JPEG to WebP, so every photoAsset path changed.
          * 15: tour titles no longer repeat the city — the cards already name it.
+         * 16: the Sirince village walk was replaced by an Ephesus ancient-city walk, so devices
+         *     drop the removed tour and pick up the new one on the next launch.
          */
-        const val CONTENT_VERSION = "15"
+        const val CONTENT_VERSION = "16"
         const val KEY_VERSION = "content_version"
 
         /** File names already seeded, so they are not read and parsed again on later launches. */

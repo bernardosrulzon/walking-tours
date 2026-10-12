@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -44,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,7 +81,12 @@ fun CitiesScreen(
     // city, which is always right once a city's tours are photographed in the same place.
     val cities = tours.groupBy { it.city }.toSortedMap()
     val countries = tours.map { it.country }.distinct().sorted()
-    var selectedCountry by remember { mutableStateOf<String?>(null) }
+    // Both survive the trip to a city and back: the back-stack entry keeps them while the
+    // city is on top, so returning lands exactly where the walker left off.
+    var selectedCountry by rememberSaveable { mutableStateOf<String?>(null) }
+    val listState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState()
+    }
     var filterExpanded by remember { mutableStateOf(false) }
     var filterFieldWidthPx by remember { mutableStateOf(0) }
     val filterArrowRotation by animateFloatAsState(
@@ -208,6 +215,7 @@ fun CitiesScreen(
                 }
             }
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .weight(1f),

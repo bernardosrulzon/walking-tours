@@ -1,6 +1,9 @@
 package com.walkingtours.app.ui.cities
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +48,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,6 +81,12 @@ fun CitiesScreen(
     val countries = tours.map { it.country }.distinct().sorted()
     var selectedCountry by remember { mutableStateOf<String?>(null) }
     var filterExpanded by remember { mutableStateOf(false) }
+    var filterFieldWidthPx by remember { mutableStateOf(0) }
+    val filterArrowRotation by animateFloatAsState(
+        targetValue = if (filterExpanded) 180f else 0f,
+        label = "filter-arrow",
+    )
+    val filterMenuScroll = rememberScrollState()
     val visible = if (selectedCountry == null) {
         cities
     } else {
@@ -116,7 +129,8 @@ fun CitiesScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .padding(top = 12.dp, bottom = 4.dp),
+                        .padding(top = 12.dp, bottom = 4.dp)
+                        .onSizeChanged { filterFieldWidthPx = it.width },
                 ) {
                     val selectedFlag = selectedCountry?.let { CountryFlags.flag(it) }.orEmpty()
                     OutlinedCard(
@@ -140,13 +154,28 @@ fun CitiesScreen(
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
-                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                            Icon(
+                                Icons.Filled.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.graphicsLayer {
+                                    rotationZ = filterArrowRotation
+                                },
+                            )
                         }
                     }
                     DropdownMenu(
                         expanded = filterExpanded,
                         onDismissRequest = { filterExpanded = false },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.width(
+                            with(LocalDensity.current) { filterFieldWidthPx.toDp() },
+                        ),
                     ) {
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 336.dp)
+                                .verticalScroll(filterMenuScroll),
+                        ) {
                         DropdownMenuItem(
                             text = { Text("🌍 All countries") },
                             onClick = {
@@ -173,6 +202,7 @@ fun CitiesScreen(
                                     }
                                 },
                             )
+                        }
                         }
                     }
                 }

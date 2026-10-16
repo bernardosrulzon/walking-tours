@@ -193,8 +193,11 @@ class ContentSeeder(
          * 15: tour titles no longer repeat the city — the cards already name it.
          * 16: the Sirince village walk was replaced by an Ephesus ancient-city walk, so devices
          *     drop the removed tour and pick up the new one on the next launch.
+         * 17: repeated background explainers (Mughals, sultans, Quran, ASI, currencies, Sinan,
+         *     Grand Vizier, Neoria, Diretas Já) consolidated into tour intros; stops keep
+         *     stop-specific angles with short refer-backs.
          */
-        const val CONTENT_VERSION = "16"
+        const val CONTENT_VERSION = "17"
         const val KEY_VERSION = "content_version"
 
         /** File names already seeded, so they are not read and parsed again on later launches. */

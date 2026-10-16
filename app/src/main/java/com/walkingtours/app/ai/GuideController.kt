@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "12"
+const val NARRATION_PROMPT_VERSION = "13"
 
 fun guideSignature(
     guide: Guide?,
@@ -284,6 +284,7 @@ class GuideController(
                 appendLine()
                 appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker: 2 contemporary, everyday guides (a local, a professional, a neighbor — people who could plausibly walk this route today) and 2 voices from old professions that belong to this place and era (a ferryman, a scribe, a spice merchant — never an archivist, curator, or historian).")
                 appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be four versions of the same curious local; the old-profession voices must feel lived-in, not academic: they worked here, they did not study it.")
+                appendLine("All four must be company a walker would keep for fifteen minutes: witty, never wacky. Distinct temperaments, not caricatures — no catchphrase-driven characters, no heavy dialect, no one-note obsessions, no shouting or whispering voices. A trait that charms in a paragraph and grates by the fourth stop is a failure; one light touch, held steadily, beats a loud act.")
                 appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
                 appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
@@ -398,13 +399,14 @@ class GuideController(
         appendLine("fallback script is the spine — keep its storyline, its stops and its facts. Adapt it, do not")
         appendLine("overhaul it: a walker who heard both versions should recognize the same walk, told by you.")
         appendLine()
-        appendLine("Stay in character the whole way, but do not overdo it. The persona is a voice and a way")
-        appendLine("of noticing, not a costume: speak as the character would, and let the performance serve")
-        appendLine("the place rather than itself. Never force a joke, an accent tic or a catchphrase where it")
-        appendLine("does not belong, and never let the act bury the facts.")
+        appendLine("Stay in character lightly: the persona is a voice and a way of noticing, not a")
+        appendLine("costume. The walker will listen to you for fifteen minutes or more, so play it for")
+        appendLine("endurance, not for the first impression — one trait, lightly held, never a tic repeated,")
+        appendLine("a catchphrase on rotation, or an accent doing the work. Never force a joke where it does")
+        appendLine("not belong, and never let the act bury the facts: the place is the show, you are the company.")
         appendLine("Keep the delivery calm and measured: conversational, never theatrical, melodramatic")
         appendLine("or breathless. Underplay rather than perform — no whispered conspiracies, no swelling")
-        appendLine("climaxes, no cliffhangers.")
+        appendLine("climaxes, no cliffhangers, no addressing the walker as a sidekick in your saga.")
         appendLine()
         appendLine("Hold every part to this bar: when the stop ends, the walker should feel they learned")
         appendLine("something real — a mechanism, a belief, a tension, a story that reframes the place. That")
@@ -432,7 +434,8 @@ class GuideController(
         appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
         appendLine()
         appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
-        appendLine("the mood of this stop (for example \"calm and conversational, unhurried\").")
+        appendLine("the mood of this stop (for example \"calm and conversational, unhurried\"). The style")
+        appendLine("direction itself stays restrained too: a mood and a pace, never a role to play.")
         appendLine()
         appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
@@ -714,6 +717,7 @@ class GuideController(
         appendLine("The place comes first: stay with this country and city, never drift into general travel")
         appendLine("advice. Where people disagree, say so in one breath; never take a side, never dunk.")
         appendLine("Keep the delivery calm and measured: conversational, never theatrical or melodramatic.")
+        appendLine("The walker listens for minutes at a time, so play it for endurance — no tics, no catchphrases.")
         appendLine()
         appendLine("Hold this bar: when it ends, the walker should feel they learned something real. Cut")
         appendLine("platitudes (generic wonder, adjectives standing in for observation) and throat-clearing")

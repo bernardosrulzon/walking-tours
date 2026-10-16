@@ -199,11 +199,17 @@ class AndroidTtsNarrationEngine(
         }
 
         currentStopId = stopId
-        displayText = text
-        estimatedDurationMs = estimateDurationMs(text)
+        // The guide's rewrite carries vocal tags for the cloud voice (`<laugh>`,
+        // `<short pause>`). The phone's engine would read those aloud — "short pause", spoken
+        // literally — so speak the cleaned text. displayText follows the cleaned text too, so the
+        // highlight, the duration estimate and resume offsets all stay in one coordinate space;
+        // the screen shows the same words via stripSpeechTags.
+        val speakable = TtsText.spokenForDevice(text)
+        displayText = speakable
+        estimatedDurationMs = estimateDurationMs(speakable)
         // Building the respelled script is a single pass over a few hundred characters, so there is
         // no reason to cache it and risk serving a stale map.
-        val built = SpokenScript.build(text)
+        val built = SpokenScript.build(speakable)
         script = built
 
         // Callers pass a display offset (used when resuming); translate it into spoken coordinates.
@@ -211,14 +217,14 @@ class AndroidTtsNarrationEngine(
         lastSpokenFrom = utteranceSpokenOffset
         val remaining = built.spokenText.substring(utteranceSpokenOffset.coerceIn(0, built.spokenText.length))
 
-        val displayHighlight = startOffset.coerceIn(0, text.length)
+        val displayHighlight = startOffset.coerceIn(0, speakable.length)
 
         if (remaining.isBlank()) {
             _progress.value = NarrationProgress(
                 state = NarrationState.COMPLETED,
                 stopId = stopId,
-                highlightStart = text.length,
-                highlightEnd = text.length,
+                highlightStart = speakable.length,
+                highlightEnd = speakable.length,
                 rate = currentRate,
             )
             return

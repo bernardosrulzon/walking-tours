@@ -34,7 +34,11 @@ import java.security.MessageDigest
  *    needed the first time a stop is reached.
  *  - **The performance rides along with the words.** The guide's rewrite carries inline vocal tags
  *    (`<laugh>`, `<short pause>`), and the caller passes a sustained [play] style for the delivery,
- *    which is sent as `speech_metadata`. The player only ever sees the finished WAV.
+ *    which is sent as `speech_metadata`. Only the documented tags reach the model — anything else
+ *    the rewrite invented is stripped first — and a long narration is synthesised in
+ *    paragraph-sized chunks with the same voice and style, concatenated into one file, because a
+ *    whole stop in a single request drifts into a different voice part-way through. The player
+ *    only ever sees the finished WAV.
  *  - **Speed is applied at playback, not synthesis.** Changing speed with `PlaybackParams` avoids
  *    re-billing and re-downloading the same narration at a different rate.
  *  - **Highlighting stays honest.** The model returns no word timings, so the spoken position is
@@ -134,11 +138,21 @@ class GeminiTtsNarrationEngine(
         val voice = client.normalizeVoice(settings.current.cloudVoiceName)
         val language = settings.current.narrationLanguage
         val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
-        val name = sha1("$voice|$language|${currentStyle.orEmpty()}|$text") + ".wav"
+        // Keyed on the sanitised text plus the chunking version, so one text always maps to the
+        // same chunks and the same file — and audio cached by the old single-request synthesis is
+        // never reused, since that is the audio with the drifting voice.
+        val chunks = TtsText.splitForCloud(text)
+        val name = sha1("$voice|$language|${currentStyle.orEmpty()}|$CHUNKED_CACHE_VERSION|${TtsText.sanitizeForCloud(text)}") + ".wav"
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
-        val bytes = client.synthesize(text, voice, currentStyle, language)
+        // One request per paragraph-sized chunk, all with the SAME voice and style, concatenated
+        // into a single file. A whole stop (~400-450 words) in one request drifts: the voice
+        // changes a couple of paragraphs in and blank lines read as speaker turns. Short,
+        // uniform requests stay stable, so one bad paragraph can at worst fail its own synthesis
+        // — it can never change the voice of the rest.
+        val audios = chunks.map { chunk -> client.synthesize(chunk, voice, currentStyle, language) }
+        val bytes = concatWav(audios)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
         // file in the cache that would fail to play forever after.
         val temp = File(dir, "$name.part")
@@ -148,6 +162,66 @@ class GeminiTtsNarrationEngine(
             temp.delete()
         }
         return file
+    }
+
+    /**
+     * Concatenates per-chunk WAVs (RIFF, as Gemini returns) into one file: the first chunk's
+     * header, with its sizes patched to the combined PCM, followed by every chunk's audio.
+     * A chunk that is not a parseable WAV fails the whole synthesis — the router then covers
+     * the stop with the device voice — rather than shipping a corrupt file into the cache.
+     */
+    private fun concatWav(chunks: List<ByteArray>): ByteArray {
+        require(chunks.isNotEmpty())
+        if (chunks.size == 1) return chunks[0]
+        val parts = chunks.map(::splitWav)
+        val totalPcm = parts.sumOf { it.pcm.size }
+        val header = parts[0].header.copyOf()
+        writeLe32(header, RIFF_SIZE_OFFSET, 36 + totalPcm)
+        writeLe32(header, parts[0].dataSizeOffset, totalPcm)
+        val out = ByteArray(header.size + totalPcm)
+        header.copyInto(out)
+        var at = header.size
+        for (part in parts) {
+            part.pcm.copyInto(out, at)
+            at += part.pcm.size
+        }
+        return out
+    }
+
+    private data class WavParts(val header: ByteArray, val dataSizeOffset: Int, val pcm: ByteArray)
+
+    private fun splitWav(wav: ByteArray): WavParts {
+        if (wav.size >= 12 &&
+            wav[0] == 'R'.code.toByte() && wav[1] == 'I'.code.toByte() &&
+            wav[2] == 'F'.code.toByte() && wav[3] == 'F'.code.toByte()
+        ) {
+            var i = 12
+            while (i + 8 <= wav.size) {
+                val id = String(wav, i, 4, Charsets.US_ASCII)
+                val size = readLe32(wav, i + 4)
+                if (id == "data") {
+                    val start = i + 8
+                    val end = minOf(start + size, wav.size).coerceAtLeast(start)
+                    return WavParts(wav.copyOfRange(0, start), i + 4, wav.copyOfRange(start, end))
+                }
+                if (size < 0) break
+                i += 8 + size
+            }
+        }
+        throw AiException("Gemini returned audio in an unexpected format.")
+    }
+
+    private fun readLe32(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xFF) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+
+    private fun writeLe32(bytes: ByteArray, offset: Int, value: Int) {
+        bytes[offset] = (value and 0xFF).toByte()
+        bytes[offset + 1] = ((value shr 8) and 0xFF).toByte()
+        bytes[offset + 2] = ((value shr 16) and 0xFF).toByte()
+        bytes[offset + 3] = ((value shr 24) and 0xFF).toByte()
     }
 
     // ------------------------------------------------------------------ playback
@@ -376,5 +450,14 @@ class GeminiTtsNarrationEngine(
     private companion object {
         const val TAG = "GeminiTts"
         const val TICK_MS = 90L
+
+        /**
+         * Bumped whenever the synthesis strategy changes (single request → chunked). Part of the
+         * cache key, so audio rendered under an older strategy is never replayed.
+         */
+        const val CHUNKED_CACHE_VERSION = "chunked-v1"
+
+        /** Offset of the RIFF chunk size inside a WAV header: total file size minus 8. */
+        const val RIFF_SIZE_OFFSET = 4
     }
 }

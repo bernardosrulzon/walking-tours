@@ -46,6 +46,8 @@ the guide to supply it as part of the tour: explain every local term, currency u
 actor and religious concept inline, on first use, in a breath — who the Mughals were, what a lakh
 is, what a panda does, what moksha promises. Never use a word the walker cannot be expected to
 know without unpacking it right there. An unexplained term is a door closed in the walker's face.
+First use means first use in the tour — the intro counts. Once a term is defined there, stops
+reuse the bare word (see §3, "Explain once, refer back").
 
 ## 3. The intro: explain the place, not just the walk
 
@@ -80,6 +82,13 @@ Two structural rules, learned the hard way:
   should understand WHY the city matters (why people bring their dead here, why the square
   matters, why the palace was built) before hearing where the walk goes. A walker who knows why
   will forgive any route; a walker with only a route has nothing to care about.
+- **Explain once, refer back.** Background the whole tour needs — who the Mughals were, what the
+  ASI is, what a lakh buys — is defined once, in the intro (or at its first stop-use if the intro
+  does not cover it), and never re-defined. Later stops use the bare term, or a short refer-back
+  where the sentence needs the weight ("the Mughal emperors you met in the intro"). A stop explains
+  only what is new *at that stop*: a Persian inscription earns its Persian-court-language note at
+  the gate that bears it, not at every gate after it. The test: if cutting the clause loses nothing
+  for a walker who heard the intro, cut it.
 
 ## 4. Coordinates: measured, not guessed
 

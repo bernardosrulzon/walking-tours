@@ -175,7 +175,7 @@ fun TourDetailScreen(
     val startLabel = when {
         allDone -> "Start over"
         visited.isEmpty() -> "Start tour"
-        else -> "Resume tour"
+        else -> "Resume"
     }
 
     // Frosted-glass action bar: the page scrolls under it, and Haze blurs whatever passes behind.

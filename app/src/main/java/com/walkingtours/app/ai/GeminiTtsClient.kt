@@ -81,16 +81,36 @@ data class CloudVoice(
 }
 
 /**
+ * The delivery every narration is synthesised with.
+ *
+ * One fixed line rather than a direction invented per stop: a style is a role to the model, and a
+ * role invites a performance, which is what made the characters sound acted. The guide's character
+ * already lives in the words — the jokes, the asides, the way they notice things — so the voice's
+ * job is to sound like a person telling that story to one listener: warm, present, in character,
+ * and never theatrical. Keeping it constant also means every stop is read by recognisably the same
+ * narrator, and nothing drifts when the writing changes.
+ */
+const val GUIDE_DELIVERY_STYLE: String =
+    "Warm, natural storytelling by one speaker, close and conversational, as if to a single " +
+        "listener. In character and engaged — amused, curious or moved where the writing is — but " +
+        "understated: a good raconteur, not an actor. No theatrical projection, no melodrama, no " +
+        "exaggerated accent, no shouting or whispering."
+
+/**
  * Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts`).
  *
  * This replaces the old Cloud Text-to-Speech call. The model takes the script as a verbatim
- * transcript and the performance as structured metadata:
+ * transcript and the delivery as structured metadata:
  *
  *  - `generationConfig.responseModalities` is `["AUDIO"]`.
  *  - `generationConfig.speechConfig.voiceConfig.voice` names a prebuilt voice.
- *  - each text part carries `speech_metadata.style`, a sustained direction for the delivery.
- *  - point-in-time sounds — `<laugh>`, `<sigh>`, `<short pause>`, `<cough>`, `<breath>` — live
- *    inline in the text where they happen.
+ *  - the text part carries `speech_metadata.style`, a sustained direction for the delivery; this
+ *    app always sends [GUIDE_DELIVERY_STYLE].
+ *
+ * The transcript is sent as one continuous block of plain speech — paragraph breaks flattened,
+ * since the model reads a blank line as a change of speaker. The documented performance tags
+ * (`<laugh>`, `<short pause>`, …) are the exception: they stay inline, where the story performs
+ * them.
  *
  * A unary request returns WAV audio (`audio/wav`) with a RIFF header by default, which is what the
  * player is fed. The API key is the Gemini key: this is a Gemini model on the Generative Language

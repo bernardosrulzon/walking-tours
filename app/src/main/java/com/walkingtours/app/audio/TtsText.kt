@@ -16,66 +16,53 @@ internal object TtsText {
     private val tagPattern = Regex("<[^>]*>")
 
     /**
-     * What is sent to Gemini TTS: the documented tags kept verbatim (normalised to their
-     * canonical lowercase form), every other `<…>` tag dropped. An invented tag such as
-     * `<pause>` would otherwise be read aloud or break the delivery.
+     * What is sent to Gemini TTS: the documented performance tags kept verbatim (normalised to
+     * their canonical lowercase form), every other `<…>` tag dropped, and paragraph breaks
+     * flattened into single spaces.
+     *
+     * The tags are the performance the walker should hear, so they survive. Everything else does
+     * not: an invented tag such as `<pause>` would be read aloud, and a blank line between
+     * paragraphs reads as a speaker turn — the model answers it with what sounds like a different
+     * narrator a couple of paragraphs in. Without the blank lines the stop is one continuous
+     * transcript, so one request comes back in one voice from start to finish.
      */
     fun sanitizeForCloud(text: String): String {
         val kept = tagPattern.replace(text) { match ->
             val inner = match.value.substring(1, match.value.length - 1).trim().lowercase()
             if (inner in cloudTags) "<$inner>" else " "
         }
-        return collapseWhitespace(kept)
+        return kept.replace(WHITESPACE, " ").trim()
     }
 
     /**
-     * Split a narration into paragraph-sized syntheses, each no longer than [maxChars].
+     * Split a narration into the requests sent to the cloud voice, each no longer than [maxChars].
      *
-     * A whole stop runs 400–450 words (~3 minutes), and a single request that long drifts: the
-     * voice changes a couple of paragraphs in, and blank lines read as speaker turns. Short
-     * requests with the same voice and style stay stable, so one bad paragraph can at worst fail
-     * its own synthesis — it can never change the voice of the rest. Small paragraphs are
-     * merged so a stop of short lines does not become dozens of requests.
+     * The whole stop goes in ONE request whenever it fits, because separate requests are separate
+     * performances: each one comes back with its own take on the same voice, and the joins between
+     * them are exactly where listeners hear the narrator change. [maxChars] is therefore well above
+     * a stop (a five-minute introduction is ~3,500 characters) and only exists so a pathologically
+     * long text stays inside the request timeout. Chunks carry no paragraph breaks, so a split can
+     * never be mistaken for a change of speaker.
      */
     fun splitForCloud(text: String, maxChars: Int = MAX_CLOUD_CHUNK_CHARS): List<String> {
         val clean = sanitizeForCloud(text)
         if (clean.length <= maxChars) return listOf(clean)
-        val paragraphs = clean.split(Regex("\\n\\s*\\n")).map { it.trim() }.filter { it.isNotEmpty() }
-        if (paragraphs.isEmpty()) return listOf(clean)
+
         val chunks = ArrayList<String>()
         val current = StringBuilder()
         fun flush() {
             if (current.isNotBlank()) chunks.add(current.toString().trim())
             current.clear()
         }
-        fun appendPiece(piece: String) {
-            if (current.isEmpty()) {
-                current.append(piece)
-                return
-            }
-            if (current.length + 2 + piece.length <= maxChars) {
-                current.append("\n\n").append(piece)
+        for (sentence in clean.split(Regex("(?<=[.!?…])\\s+")).filter { it.isNotBlank() }) {
+            if (current.isNotEmpty() && current.length + 1 + sentence.length > maxChars) flush()
+            if (sentence.length <= maxChars) {
+                if (current.isNotEmpty()) current.append(' ')
+                current.append(sentence)
             } else {
+                // Pathological single sentence: hard-split so synthesis stays bounded.
                 flush()
-                current.append(piece)
-            }
-        }
-        for (paragraph in paragraphs) {
-            if (paragraph.length <= maxChars) {
-                appendPiece(paragraph)
-                continue
-            }
-            // One over-long paragraph: split on sentence boundaries so no request is huge.
-            flush()
-            val sentences = paragraph.split(Regex("(?<=[.!?…])\\s+")).filter { it.isNotBlank() }
-            for (sentence in sentences) {
-                if (sentence.length <= maxChars) {
-                    appendPiece(sentence)
-                } else {
-                    // Pathological single sentence: hard-split so synthesis stays bounded.
-                    flush()
-                    chunks.addAll(sentence.chunked(maxChars).map { it.trim() }.filter { it.isNotEmpty() })
-                }
+                chunks.addAll(sentence.chunked(maxChars).map { it.trim() }.filter { it.isNotEmpty() })
             }
         }
         flush()
@@ -100,5 +87,12 @@ internal object TtsText {
             .replace(Regex("(?:[ \\t]*\\n){2,}"), "\n\n")
             .trim()
 
-    const val MAX_CLOUD_CHUNK_CHARS = 1000
+    private val WHITESPACE = Regex("\\s+")
+
+    /**
+     * Roughly twice the longest narration the guide ever writes, so a stop (and its introduction)
+     * is always synthesised in a single request. Latency scales with the text: a 2,700-character
+     * introduction takes about 40 s, well inside the client's timeout.
+     */
+    const val MAX_CLOUD_CHUNK_CHARS = 6000
 }

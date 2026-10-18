@@ -5,10 +5,11 @@ import org.json.JSONObject
 /**
  * A guide persona the walker can choose, generated for one tour and remembered for it.
  *
- * [style] is the instruction handed back to the model when it rewrites a stop in this voice, so it
- * is stored with the persona rather than re-derived. [gender] is "feminine" or "masculine" when the
- * character reads as one, else blank — the spoken voice is matched to it, so a guide never sounds
- * like the wrong person.
+ * [style] is the guide's temperament: the instruction handed back to the model when it rewrites a
+ * stop in this voice, and the note the cloud voice colours its delivery with. It is stored with the
+ * persona rather than re-derived. [gender] is "feminine" or "masculine" when the character reads as
+ * one, else blank — the spoken voice is matched to it, so a guide never sounds like the wrong
+ * person.
  */
 data class Guide(
     val id: String,

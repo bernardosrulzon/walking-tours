@@ -81,20 +81,25 @@ data class CloudVoice(
 }
 
 /**
- * The delivery every narration is synthesised with.
+ * The delivery a narration is synthesised with: a fixed frame, plus the guide's own temperament.
  *
- * One fixed line rather than a direction invented per stop: a style is a role to the model, and a
- * role invites a performance, which is what made the characters sound acted. The guide's character
- * already lives in the words — the jokes, the asides, the way they notice things — so the voice's
- * job is to sound like a person telling that story to one listener: warm, present, in character,
- * and never theatrical. Keeping it constant also means every stop is read by recognisably the same
- * narrator, and nothing drifts when the writing changes.
+ * The frame is what keeps the performance honest — a person telling a story to one listener, never
+ * an actor. The temperament is what keeps it from sounding like the same narrator in every tour:
+ * "dry and curious" and "chatty and practical" should not read alike. What made the old per-stop
+ * styles too much was not the character, it was the role: asking the model to *be* someone invites
+ * a voice and a performance. So the persona goes in as an attitude, under the frame, and the same
+ * guide keeps that attitude for every stop of the walk.
  */
-const val GUIDE_DELIVERY_STYLE: String =
-    "Warm, natural storytelling by one speaker, close and conversational, as if to a single " +
-        "listener. In character and engaged — amused, curious or moved where the writing is — but " +
-        "understated: a good raconteur, not an actor. No theatrical projection, no melodrama, no " +
-        "exaggerated accent, no shouting or whispering."
+fun characterDeliveryStyle(temperament: String?): String {
+    val note = temperament?.trim()?.trimEnd('.', ' ')?.takeIf { it.isNotBlank() }
+    val frame = "Warm, natural storytelling by one speaker, close and conversational, as if to a " +
+        "single listener."
+    val limits = "In character but understated — a good raconteur, not an actor. No theatrical " +
+        "projection, no melodrama, no exaggerated accent, no shouting or whispering."
+    if (note == null) return "$frame $limits"
+    return "$frame This teller's temperament, carried as attitude and never as an impression of a " +
+        "voice: ${note.take(240)}. $limits"
+}
 
 /**
  * Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts`).
@@ -105,7 +110,7 @@ const val GUIDE_DELIVERY_STYLE: String =
  *  - `generationConfig.responseModalities` is `["AUDIO"]`.
  *  - `generationConfig.speechConfig.voiceConfig.voice` names a prebuilt voice.
  *  - the text part carries `speech_metadata.style`, a sustained direction for the delivery; this
- *    app always sends [GUIDE_DELIVERY_STYLE].
+ *    app always sends [characterDeliveryStyle] for the chosen guide.
  *
  * The transcript is sent as one continuous block of plain speech — paragraph breaks flattened,
  * since the model reads a blank line as a change of speaker. The documented performance tags

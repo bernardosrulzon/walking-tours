@@ -21,7 +21,7 @@ import org.json.JSONObject
 /** A personalised narration, tagged with the signature it was generated under. */
 data class GuideNarration(val signature: String, val text: String, val style: String?)
 
-/** What is handed to the narration engine: the words, and the (legacy) delivery note they came with. */
+/** What is handed to the narration engine: the words, and the guide's temperament to colour them. */
 data class SpokenLine(val text: String, val style: String?)
 
 /**
@@ -75,8 +75,8 @@ fun guideSignature(
  *
  * Each rewrite returns the words, and the persona lives in those words: the jokes, the asides, the
  * way it notices things, plus a couple of inline vocal tags where a real teller would use one. The
- * cloud voice performs them with one fixed, warm-but-understated delivery — the prompt directs the
- * character, never an act. (Older cached narrations may still carry tags; the audio and transcript
+ * cloud voice performs them with the guide's temperament worked into a fixed frame — character as
+ * attitude, never an act. (Older cached narrations may still carry tags; the audio and transcript
  * layers strip the undocumented ones.)
  *
  * Generation is lazy: a stop is only rewritten when it is about to be played, so a walk that stops
@@ -290,7 +290,7 @@ class GuideController(
                 appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
                 appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
-                appendLine("All four are narrated by the same warm, natural voice; what differs is what they notice and how they put it. Their \"style\" describes that way of seeing — never an accent, a voice impression, or a way of performing.")
+                appendLine("All four are narrated by the same kind of warm, natural voice, never a performance; within that, each keeps its own temperament. The difference lives in what they notice, how they put it, and the attitude the walker hears.")
                 appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as a note for the model that rewrites the narration.")
                 append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), style (one plain sentence on how this guide sees the place and what they care about) and gender (\"feminine\" or \"masculine\", whichever the character is).")
             },
@@ -444,7 +444,8 @@ class GuideController(
      * The model is asked for `{"text": "..."}`. It is tolerated if it answers with plain prose
      * instead — the whole reply becomes the text. A reply that looks like JSON but cannot be parsed
      * (truncated, say) yields null, so the caller retries rather than speaking broken JSON at the
-     * walker. `style` is no longer requested; older replies that still carry one are accepted.
+     * walker. The delivery always comes from the guide, never from the reply: a mood written per
+     * stop was the thing that made the same character sound acted on one stop and flat on the next.
      */
     private fun parseSpokenLine(raw: String, guide: Guide): SpokenLine? {
         val trimmed = raw.trim()
@@ -453,10 +454,7 @@ class GuideController(
         if (jsonText != null) {
             val obj = runCatching { JSONObject(jsonText) }.getOrNull()
             val text = obj?.optString("text")?.trim().orEmpty()
-            if (text.isNotBlank()) {
-                val style = obj!!.optString("style").trim().ifBlank { guide.style }
-                return SpokenLine(text, style)
-            }
+            if (text.isNotBlank()) return SpokenLine(text, guide.style)
             // Malformed JSON: salvage the text field if it is recoverable, else give up.
             val salvaged = salvageTextField(jsonText) ?: return null
             return SpokenLine(salvaged, guide.style)

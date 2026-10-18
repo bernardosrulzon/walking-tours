@@ -10,7 +10,7 @@ import android.util.Log
 import com.walkingtours.app.ai.AiException
 import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.ai.GeminiTtsClient
-import com.walkingtours.app.ai.GUIDE_DELIVERY_STYLE
+import com.walkingtours.app.ai.characterDeliveryStyle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,11 +33,11 @@ import java.security.MessageDigest
  *    app's cache keyed by voice, language and text. After that the tour plays entirely offline and
  *    costs nothing, which is what makes a cloud voice viable for a walking tour: the network is
  *    only needed the first time a stop is reached.
- *  - **A stop is one take.** The whole narration is sent as a single continuous request with a
- *    fixed, characterful-but-understated delivery style, because every request is an independent
- *    performance: split a stop into paragraph-sized requests and the joins are audible as a change
- *    of narrator. Paragraph breaks are flattened before sending — the model reads them as turns —
- *    while the documented performance tags stay inline where the story performs them. A
+ *  - **A stop is one take.** The whole narration is sent as a single continuous request, with the
+ *    guide's temperament worked into a fixed delivery frame, because every request is an
+ *    independent performance: split a stop into paragraph-sized requests and the joins are audible
+ *    as a change of narrator. Paragraph breaks are flattened before sending — the model reads them
+ *    as turns — while the documented performance tags stay inline where the story performs them. A
  *    pathologically long text is still chunked, but only above [TtsText.MAX_CLOUD_CHUNK_CHARS],
  *    far past any narration the guide writes.
  *  - **Speed is applied at playback, not synthesis.** Changing speed with `PlaybackParams` avoids
@@ -139,10 +139,12 @@ class GeminiTtsNarrationEngine(
         val voice = client.normalizeVoice(settings.current.cloudVoiceName)
         val language = settings.current.narrationLanguage
         val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
-        // Keyed on the sanitised text plus the synthesis version. The per-stop style is not part of
-        // the key: delivery is a constant, so a changed style string cannot change the audio.
+        // Keyed on the sanitised text, the delivery and the synthesis version. The delivery varies
+        // by guide, not by stop, so it has to be in the key: the same words in another guide's
+        // voice are another file.
         val chunks = TtsText.splitForCloud(text)
-        val name = sha1("$voice|$language|$AUDIO_CACHE_VERSION|${TtsText.sanitizeForCloud(text)}") + ".wav"
+        val delivery = characterDeliveryStyle(currentStyle)
+        val name = sha1("$voice|$language|$delivery|$AUDIO_CACHE_VERSION|${TtsText.sanitizeForCloud(text)}") + ".wav"
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
@@ -151,7 +153,7 @@ class GeminiTtsNarrationEngine(
         // longer than MAX_CLOUD_CHUNK_CHARS is split at sentence boundaries, with the same voice
         // and the same delivery style throughout.
         val audios = chunks.map { chunk ->
-            client.synthesize(chunk, voice, GUIDE_DELIVERY_STYLE, language)
+            client.synthesize(chunk, voice, delivery, language)
         }
         val bytes = concatWav(audios)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
@@ -457,7 +459,7 @@ class GeminiTtsNarrationEngine(
          * a different delivery style). Part of the cache key, so audio rendered under an older
          * strategy is never replayed.
          */
-        const val AUDIO_CACHE_VERSION = "single-take-v3"
+        const val AUDIO_CACHE_VERSION = "single-take-v4"
 
         /** Offset of the RIFF chunk size inside a WAV header: total file size minus 8. */
         const val RIFF_SIZE_OFFSET = 4

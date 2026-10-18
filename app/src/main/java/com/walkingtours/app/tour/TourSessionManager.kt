@@ -79,6 +79,13 @@ class TourSessionManager(
     private var narrationJob: Job? = null
 
     /**
+     * The page [narrationJob] belongs to: a stop id, or [OVERVIEW_ID]. A job outlives the page that
+     * asked for it — the text rewrite takes a moment — so without this, a narration prepared for the
+     * page the walker just left finishes a beat later and starts talking over the page they moved to.
+     */
+    private var narrationJobPage: String? = null
+
+    /**
      * Bumped by every start and every teardown, so an in-flight start that is superseded — the user
      * pressed Back while the tour was still loading — cannot install itself afterwards and leave a
      * walk running with nothing on screen.
@@ -281,6 +288,7 @@ class TourSessionManager(
         narration.stop()
         guide.ensureVoiceMatchesGuide(tourId)
         narrationJob?.cancel()
+        narrationJobPage = OVERVIEW_ID
         narrationJob = scope.launch {
             val line = guide.narration(
                 tourId,
@@ -301,12 +309,33 @@ class TourSessionManager(
         val tourId = current.tourId ?: return
         val overview = current.overviewText
         if (overview.isBlank()) return
+        // The walker has moved back to the introduction: whatever the last stop was doing ends here.
+        endNarrationFor(OVERVIEW_ID)
         scope.launch {
             guide.narration(
                 tourId,
                 NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview, isIntroduction = true),
             )
         }
+    }
+
+    /**
+     * The walker has moved to another page, so the narration the old one owned ends now — playback
+     * and pending preparation alike.
+     *
+     * In automatic mode the new page's audio takes its place a moment later; in manual mode nothing
+     * does, and this is what silence means. It also closes the race that made audio start *after* the
+     * move: a chapter whose text is still being written for the page the walker just left would
+     * otherwise begin speaking over the page they moved to. The page's own narration is left alone,
+     * because re-focusing the page the walker is on is not a move.
+     */
+    private fun endNarrationFor(pageId: String) {
+        if (narrationJobPage != null && narrationJobPage != pageId) {
+            narrationJob?.cancel()
+            narrationJob = null
+            narrationJobPage = null
+        }
+        if (narration.progress.value.stopId != pageId) narration.stop()
     }
 
     fun endTour() = teardown()
@@ -335,6 +364,7 @@ class TourSessionManager(
         overviewJob = null
         narrationJob?.cancel()
         narrationJob = null
+        narrationJobPage = null
         locationTracker.release()
         narration.stop()
         detector.reset()
@@ -580,6 +610,7 @@ class TourSessionManager(
         narration.stop()
         guide.ensureVoiceMatchesGuide(tourId)
         narrationJob?.cancel()
+        narrationJobPage = stop.id
         narrationJob = scope.launch {
             val line = guide.narration(
                 tourId,
@@ -600,6 +631,11 @@ class TourSessionManager(
         fired += stopId
         _state.value = current.copy(currentStopId = stopId, showingOverview = false)
         scope.launch { repository.rememberLastStop(current.tourId ?: return@launch, stopId) }
+
+        // Moving to a page ends the chapter the walker left behind, even though manual mode starts
+        // nothing in its place: the stop they swiped away from must not keep talking — nor start
+        // talking a moment later, which is what it did while its text was still being written.
+        endNarrationFor(stopId)
 
         // Load the guide's version for the page to read, without starting it: in manual mode nothing
         // plays until the walker presses play.

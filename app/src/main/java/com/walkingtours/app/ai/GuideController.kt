@@ -21,7 +21,7 @@ import org.json.JSONObject
 /** A personalised narration, tagged with the signature it was generated under. */
 data class GuideNarration(val signature: String, val text: String, val style: String?)
 
-/** What is handed to the narration engine: the words, and the guide's temperament to colour them. */
+/** What is handed to the narration engine: the words, and the delivery to perform them with. */
 data class SpokenLine(val text: String, val style: String?)
 
 /**
@@ -48,7 +48,7 @@ data class NarrationRequest(
  * and its audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "15"
+const val NARRATION_PROMPT_VERSION = "16"
 
 fun guideSignature(
     guide: Guide?,
@@ -73,11 +73,9 @@ fun guideSignature(
  * Two jobs. It proposes five guides for a tour from the walker's ranked preferences and where the
  * tour is, and — once a guide is chosen — it rewrites one narration at a time, on demand.
  *
- * Each rewrite returns the words, and the persona lives in those words: the jokes, the asides, the
- * way it notices things, plus a couple of inline vocal tags where a real teller would use one. The
- * cloud voice performs them with the guide's temperament worked into a fixed frame — character as
- * attitude, never an act. (Older cached narrations may still carry tags; the audio and transcript
- * layers strip the undocumented ones.)
+ * Each rewrite returns both the words and a delivery [SpokenLine.style]. The words may carry inline
+ * vocal tags (`<laugh>`, `<sigh>`, `<short pause>`) where a moment calls for one; the engine performs
+ * them and the screen strips them, so the walker hears the performance and reads clean prose.
  *
  * Generation is lazy: a stop is only rewritten when it is about to be played, so a walk that stops
  * early never pays for stops it did not reach. Results are cached in memory and on disk, keyed by
@@ -286,13 +284,11 @@ class GuideController(
                 appendLine()
                 appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker: 2 contemporary, everyday guides (a local, a professional, a neighbor — people who could plausibly walk this route today) and 2 voices from old professions that belong to this place and era (a ferryman, a scribe, a spice merchant — never an archivist, curator, or historian).")
                 appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be four versions of the same curious local; the old-profession voices must feel lived-in, not academic: they worked here, they did not study it.")
-                appendLine("All four must be company a walker would keep for fifteen minutes: witty, never wacky. Distinct temperaments, not caricatures — no catchphrase-driven characters, no heavy dialect, no one-note obsessions, no shouting or whispering voices. A trait that charms in a paragraph and grates by the fourth stop is a failure; one light touch, held steadily, beats a loud act.")
                 appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
                 appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
                 appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
-                appendLine("All four are narrated by the same kind of warm, natural voice, never a performance; within that, each keeps its own temperament. The difference lives in what they notice, how they put it, and the attitude the walker hears.")
-                appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as a note for the model that rewrites the narration.")
-                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), style (one plain sentence on how this guide sees the place and what they care about) and gender (\"feminine\" or \"masculine\", whichever the character is).")
+                appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
+                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), style (one sentence on how this guide speaks, for a narrator to imitate) and gender (\"feminine\" or \"masculine\", whichever the character is).")
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,
@@ -329,7 +325,7 @@ class GuideController(
             history = emptyList(),
             prompt = buildString {
                 appendLine(request.context + ".")
-                appendLine("Rewrite this narration in your own voice:")
+                appendLine("Rewrite this narration in your own voice, and direct the performance:")
                 appendLine()
                 append(request.authored)
             },
@@ -357,7 +353,8 @@ class GuideController(
             appendLine("Write the entire narration in Brazilian Portuguese (português do Brasil): every")
             appendLine("word the walker hears and reads is Portuguese. Keep proper names of people,")
             appendLine("places and monuments in their original form. The inline vocal tags stay exactly")
-            appendLine("as they are (<laugh>, <sigh>, <breath>, <cough>, <short pause>), untranslated.")
+            appendLine("as they are (<laugh>, <sigh>, <breath>, <cough>, <short pause>), and the \"style\"")
+            appendLine("direction you return stays in English.")
             appendLine()
             appendLine("Important: do NOT translate the English script sentence by sentence. That produces")
             appendLine("stiff, foreign-sounding Portuguese. Read the script for the facts only, then tell")
@@ -401,24 +398,21 @@ class GuideController(
         appendLine("fallback script is the spine — keep its storyline, its stops and its facts. Adapt it, do not")
         appendLine("overhaul it: a walker who heard both versions should recognize the same walk, told by you.")
         appendLine()
-        appendLine("Stay in character lightly: the persona is a voice and a way of noticing, not a")
-        appendLine("costume. The walker will listen to you for fifteen minutes or more, so play it for")
-        appendLine("endurance, not for the first impression — one trait, lightly held, never a tic repeated,")
-        appendLine("a catchphrase on rotation, or an accent doing the work. Never force a joke where it does")
-        appendLine("not belong, and never let the act bury the facts: the place is the show, you are the company.")
-        appendLine("Keep the delivery warm and conversational: a good talker, not an actor. Lively where")
-        appendLine("the material is lively, understated everywhere else — never theatrical, melodramatic")
-        appendLine("or breathless, no whispered conspiracies, no swelling climaxes, no cliffhangers, no")
-        appendLine("addressing the walker as a sidekick in your saga.")
+        appendLine("Stay in character the whole way, but do not overdo it. The persona is a voice and a way")
+        appendLine("of noticing, not a costume: speak as the character would, and let the performance serve")
+        appendLine("the place rather than itself. Never force a joke, an accent tic or a catchphrase where it")
+        appendLine("does not belong, and never let the act bury the facts.")
+        appendLine("Keep the delivery calm and measured: conversational, never theatrical, melodramatic")
+        appendLine("or breathless. Underplay rather than perform — no whispered conspiracies, no swelling")
+        appendLine("climaxes, no cliffhangers.")
         appendLine()
         appendLine("Hold every part to this bar: when the stop ends, the walker should feel they learned")
         appendLine("something real — a mechanism, a belief, a tension, a story that reframes the place. That")
         appendLine("is balance, not density: plain sentences are fine when they carry something. Cut")
         appendLine("platitudes (generic wonder, adjectives standing in for observation), throat-clearing")
         appendLine("openers, stage directions that direct nothing, and descriptions where each clause teaches")
-        appendLine("nothing new. Be good company: joke, tease, be informal and irreverent — a light beat")
-        appendLine("or two per stop, not a routine. Humor is delivery, never a substitute: every joke must")
-        appendLine("land on a fact.")
+        appendLine("nothing new. Humor and irreverence are delivery, never a substitute: every joke must land")
+        appendLine("on a fact.")
         appendLine()
         appendLine("The only things to hold on to:")
         appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
@@ -431,21 +425,23 @@ class GuideController(
         appendLine("  except the introduction, which may run to about five minutes when the city's context")
         appendLine("  demands it. Clarity first, always.")
         appendLine("- Write for the ear: second person, present tense, plain prose. No markdown, no lists,")
-        appendLine("  no headings. Keep a blank line between paragraphs — the transcript shows them as")
-        appendLine("  separate paragraphs.")
+        appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
+        appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
         appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
         appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
         appendLine()
-        appendLine("Reply with ONLY a JSON object: {\"text\": \"...\"}. No code fences.")
+        appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
+        appendLine("the mood of this stop (for example \"calm and conversational, unhurried\").")
+        appendLine()
+        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
 
     /**
-     * The model is asked for `{"text": "..."}`. It is tolerated if it answers with plain prose
-     * instead — the whole reply becomes the text. A reply that looks like JSON but cannot be parsed
-     * (truncated, say) yields null, so the caller retries rather than speaking broken JSON at the
-     * walker. The delivery always comes from the guide, never from the reply: a mood written per
-     * stop was the thing that made the same character sound acted on one stop and flat on the next.
+     * The model is asked for `{"style": "...", "text": "..."}`. It is tolerated if it answers with
+     * plain prose instead — the whole reply becomes the text. A reply that looks like JSON but
+     * cannot be parsed (truncated, say) yields null, so the caller retries rather than speaking
+     * broken JSON at the walker.
      */
     private fun parseSpokenLine(raw: String, guide: Guide): SpokenLine? {
         val trimmed = raw.trim()
@@ -454,7 +450,10 @@ class GuideController(
         if (jsonText != null) {
             val obj = runCatching { JSONObject(jsonText) }.getOrNull()
             val text = obj?.optString("text")?.trim().orEmpty()
-            if (text.isNotBlank()) return SpokenLine(text, guide.style)
+            if (text.isNotBlank()) {
+                val style = obj!!.optString("style").trim().ifBlank { guide.style }
+                return SpokenLine(text, style)
+            }
             // Malformed JSON: salvage the text field if it is recoverable, else give up.
             val salvaged = salvageTextField(jsonText) ?: return null
             return SpokenLine(salvaged, guide.style)
@@ -693,8 +692,8 @@ class GuideController(
         if (portuguese) {
             appendLine()
             appendLine("Write everything in Brazilian Portuguese (português do Brasil), except proper names")
-            appendLine("in their original form. The inline vocal tags stay exactly as they are (<laugh>,")
-            appendLine("<sigh>, <breath>, <cough>, <short pause>), untranslated.")
+            appendLine("in their original form, the inline vocal tags exactly as they are (<laugh>, <sigh>,")
+            appendLine("<breath>, <cough>, <short pause>), and the \"style\" direction, which stays in English.")
             appendLine()
             appendLine("Important: do NOT translate sentence by sentence. Read for the facts, then tell it")
             appendLine("fresh, the way a gifted Brazilian storyteller would speak it aloud.")
@@ -714,27 +713,27 @@ class GuideController(
         }
         appendLine("The place comes first: stay with this country and city, never drift into general travel")
         appendLine("advice. Where people disagree, say so in one breath; never take a side, never dunk.")
-        appendLine("Keep the delivery warm and conversational: a good talker, never theatrical or")
-        appendLine("melodramatic. The walker listens for minutes at a time, so play it for endurance — no")
-        appendLine("tics, no catchphrases.")
+        appendLine("Keep the delivery calm and measured: conversational, never theatrical or melodramatic.")
         appendLine()
         appendLine("Hold this bar: when it ends, the walker should feel they learned something real. Cut")
         appendLine("platitudes (generic wonder, adjectives standing in for observation) and throat-clearing")
-        appendLine("openers. Be good company — a joke or a wry aside where it fits — but humor is delivery,")
-        appendLine("never a substitute: every joke must land on a fact.")
+        appendLine("openers. Humor is delivery, never a substitute: every joke must land on a fact.")
         appendLine()
         appendLine("The only things to hold on to:")
         appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
         appendLine("  or sights that were not there. Reframing is welcome; fabrication is not. If you are")
         appendLine("  unsure of something, leave it out rather than guessing.")
         appendLine("- Write for the ear: second person where natural, plain prose. No markdown, no lists,")
-        appendLine("  no headings. Keep a blank line between paragraphs — the transcript shows them as")
-        appendLine("  separate paragraphs.")
+        appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
+        appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
         appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
         appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
         appendLine()
-        appendLine("Reply with ONLY a JSON object: {\"text\": \"...\"}. No code fences.")
+        appendLine("Also give a sustained style direction for the whole delivery, matching this voice and")
+        appendLine("the mood of the subject (for example \"warm and unhurried\").")
+        appendLine()
+        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
     }
 
     private companion object {

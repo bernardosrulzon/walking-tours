@@ -35,41 +35,6 @@ internal object TtsText {
     }
 
     /**
-     * Split a narration into the requests sent to the cloud voice, each no longer than [maxChars].
-     *
-     * The whole stop goes in ONE request whenever it fits, because separate requests are separate
-     * performances: each one comes back with its own take on the same voice, and the joins between
-     * them are exactly where listeners hear the narrator change. [maxChars] is therefore well above
-     * a stop (a five-minute introduction is ~3,500 characters) and only exists so a pathologically
-     * long text stays inside the request timeout. Chunks carry no paragraph breaks, so a split can
-     * never be mistaken for a change of speaker.
-     */
-    fun splitForCloud(text: String, maxChars: Int = MAX_CLOUD_CHUNK_CHARS): List<String> {
-        val clean = sanitizeForCloud(text)
-        if (clean.length <= maxChars) return listOf(clean)
-
-        val chunks = ArrayList<String>()
-        val current = StringBuilder()
-        fun flush() {
-            if (current.isNotBlank()) chunks.add(current.toString().trim())
-            current.clear()
-        }
-        for (sentence in clean.split(Regex("(?<=[.!?…])\\s+")).filter { it.isNotBlank() }) {
-            if (current.isNotEmpty() && current.length + 1 + sentence.length > maxChars) flush()
-            if (sentence.length <= maxChars) {
-                if (current.isNotEmpty()) current.append(' ')
-                current.append(sentence)
-            } else {
-                // Pathological single sentence: hard-split so synthesis stays bounded.
-                flush()
-                chunks.addAll(sentence.chunked(maxChars).map { it.trim() }.filter { it.isNotEmpty() })
-            }
-        }
-        flush()
-        return chunks.ifEmpty { listOf(clean) }
-    }
-
-    /**
      * What the on-device engine speaks: no angle-bracket tag ever reaches the speaker.
      *
      * `<short pause>` becomes a full stop — the only pause every TTS engine honours — and the
@@ -88,11 +53,4 @@ internal object TtsText {
             .trim()
 
     private val WHITESPACE = Regex("\\s+")
-
-    /**
-     * Roughly twice the longest narration the guide ever writes, so a stop (and its introduction)
-     * is always synthesised in a single request. Latency scales with the text: a 2,700-character
-     * introduction takes about 40 s, well inside the client's timeout.
-     */
-    const val MAX_CLOUD_CHUNK_CHARS = 6000
 }

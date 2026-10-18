@@ -10,7 +10,6 @@ import android.util.Log
 import com.walkingtours.app.ai.AiException
 import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.ai.GeminiTtsClient
-import com.walkingtours.app.ai.characterDeliveryStyle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,16 +29,15 @@ import java.security.MessageDigest
  * Design decisions that matter:
  *
  *  - **Synthesise once, play many times.** Each stop's narration is fetched once and written to the
- *    app's cache keyed by voice, language and text. After that the tour plays entirely offline and
- *    costs nothing, which is what makes a cloud voice viable for a walking tour: the network is
- *    only needed the first time a stop is reached.
- *  - **A stop is one take.** The whole narration is sent as a single continuous request, with the
- *    guide's temperament worked into a fixed delivery frame, because every request is an
- *    independent performance: split a stop into paragraph-sized requests and the joins are audible
- *    as a change of narrator. Paragraph breaks are flattened before sending — the model reads them
- *    as turns — while the documented performance tags stay inline where the story performs them. A
- *    pathologically long text is still chunked, but only above [TtsText.MAX_CLOUD_CHUNK_CHARS],
- *    far past any narration the guide writes.
+ *    app's cache keyed by voice, language, delivery style and text. After that the tour plays
+ *    entirely offline and costs nothing, which is what makes a cloud voice viable for a walking
+ *    tour: the network is only needed the first time a stop is reached.
+ *  - **One request for the whole narration, never a batch.** Every request is an independent
+ *    performance: split a stop into paragraph-sized requests and the joins are audible as a change
+ *    of narrator. The stop goes to Gemini whole, and it fits — three minutes of speech comes back in
+ *    about 30 s. Paragraph breaks are flattened before sending (the model reads a blank line as a
+ *    change of speaker) while the documented performance tags stay inline, where the story performs
+ *    them.
  *  - **Speed is applied at playback, not synthesis.** Changing speed with `PlaybackParams` avoids
  *    re-billing and re-downloading the same narration at a different rate.
  *  - **Highlighting stays honest.** The model returns no word timings, so the spoken position is
@@ -139,23 +137,17 @@ class GeminiTtsNarrationEngine(
         val voice = client.normalizeVoice(settings.current.cloudVoiceName)
         val language = settings.current.narrationLanguage
         val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
-        // Keyed on the sanitised text, the delivery and the synthesis version. The delivery varies
-        // by guide, not by stop, so it has to be in the key: the same words in another guide's
-        // voice are another file.
-        val chunks = TtsText.splitForCloud(text)
-        val delivery = characterDeliveryStyle(currentStyle)
-        val name = sha1("$voice|$language|$delivery|$AUDIO_CACHE_VERSION|${TtsText.sanitizeForCloud(text)}") + ".wav"
+        // Keyed on the sanitised text plus voice, language, delivery style and synthesis version.
+        val clean = TtsText.sanitizeForCloud(text)
+        val name = sha1("$voice|$language|${currentStyle.orEmpty()}|$AUDIO_CACHE_VERSION|$clean") + ".wav"
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
-        // Usually one request for the whole stop: a complete narration comes back as one take, in
-        // one voice, which is the only way to avoid an audible change part-way through. Only a text
-        // longer than MAX_CLOUD_CHUNK_CHARS is split at sentence boundaries, with the same voice
-        // and the same delivery style throughout.
-        val audios = chunks.map { chunk ->
-            client.synthesize(chunk, voice, delivery, language)
-        }
-        val bytes = concatWav(audios)
+        // One request for the whole narration, always. A stop is ~3 minutes of audio and comes back
+        // from Gemini in about 30 s, well inside the client's timeout, and synthesising it whole is
+        // the only way it plays in one voice: paragraph-sized requests each return their own take,
+        // and the joins are audible as a change of narrator.
+        val bytes = client.synthesize(clean, voice, currentStyle, language)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
         // file in the cache that would fail to play forever after.
         val temp = File(dir, "$name.part")
@@ -165,66 +157,6 @@ class GeminiTtsNarrationEngine(
             temp.delete()
         }
         return file
-    }
-
-    /**
-     * Concatenates per-chunk WAVs (RIFF, as Gemini returns) into one file: the first chunk's
-     * header, with its sizes patched to the combined PCM, followed by every chunk's audio.
-     * A chunk that is not a parseable WAV fails the whole synthesis — the router then covers
-     * the stop with the device voice — rather than shipping a corrupt file into the cache.
-     */
-    private fun concatWav(chunks: List<ByteArray>): ByteArray {
-        require(chunks.isNotEmpty())
-        if (chunks.size == 1) return chunks[0]
-        val parts = chunks.map(::splitWav)
-        val totalPcm = parts.sumOf { it.pcm.size }
-        val header = parts[0].header.copyOf()
-        writeLe32(header, RIFF_SIZE_OFFSET, 36 + totalPcm)
-        writeLe32(header, parts[0].dataSizeOffset, totalPcm)
-        val out = ByteArray(header.size + totalPcm)
-        header.copyInto(out)
-        var at = header.size
-        for (part in parts) {
-            part.pcm.copyInto(out, at)
-            at += part.pcm.size
-        }
-        return out
-    }
-
-    private data class WavParts(val header: ByteArray, val dataSizeOffset: Int, val pcm: ByteArray)
-
-    private fun splitWav(wav: ByteArray): WavParts {
-        if (wav.size >= 12 &&
-            wav[0] == 'R'.code.toByte() && wav[1] == 'I'.code.toByte() &&
-            wav[2] == 'F'.code.toByte() && wav[3] == 'F'.code.toByte()
-        ) {
-            var i = 12
-            while (i + 8 <= wav.size) {
-                val id = String(wav, i, 4, Charsets.US_ASCII)
-                val size = readLe32(wav, i + 4)
-                if (id == "data") {
-                    val start = i + 8
-                    val end = minOf(start + size, wav.size).coerceAtLeast(start)
-                    return WavParts(wav.copyOfRange(0, start), i + 4, wav.copyOfRange(start, end))
-                }
-                if (size < 0) break
-                i += 8 + size
-            }
-        }
-        throw AiException("Gemini returned audio in an unexpected format.")
-    }
-
-    private fun readLe32(bytes: ByteArray, offset: Int): Int =
-        (bytes[offset].toInt() and 0xFF) or
-            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
-            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
-
-    private fun writeLe32(bytes: ByteArray, offset: Int, value: Int) {
-        bytes[offset] = (value and 0xFF).toByte()
-        bytes[offset + 1] = ((value shr 8) and 0xFF).toByte()
-        bytes[offset + 2] = ((value shr 16) and 0xFF).toByte()
-        bytes[offset + 3] = ((value shr 24) and 0xFF).toByte()
     }
 
     // ------------------------------------------------------------------ playback
@@ -455,13 +387,10 @@ class GeminiTtsNarrationEngine(
         const val TICK_MS = 90L
 
         /**
-         * Bumped whenever the synthesis strategy changes (paragraph chunks → one take per stop, or
-         * a different delivery style). Part of the cache key, so audio rendered under an older
-         * strategy is never replayed.
+         * Bumped whenever the synthesis strategy changes (paragraph chunks → one request for the
+         * whole narration, or a different text/delivery pipeline). Part of the cache key, so audio
+         * rendered under an older strategy is never replayed.
          */
-        const val AUDIO_CACHE_VERSION = "single-take-v4"
-
-        /** Offset of the RIFF chunk size inside a WAV header: total file size minus 8. */
-        const val RIFF_SIZE_OFFSET = 4
+        const val AUDIO_CACHE_VERSION = "single-request-v5"
     }
 }

@@ -81,36 +81,15 @@ data class CloudVoice(
 }
 
 /**
- * The delivery a narration is synthesised with: a fixed frame, plus the guide's own temperament.
- *
- * The frame is what keeps the performance honest — a person telling a story to one listener, never
- * an actor. The temperament is what keeps it from sounding like the same narrator in every tour:
- * "dry and curious" and "chatty and practical" should not read alike. What made the old per-stop
- * styles too much was not the character, it was the role: asking the model to *be* someone invites
- * a voice and a performance. So the persona goes in as an attitude, under the frame, and the same
- * guide keeps that attitude for every stop of the walk.
- */
-fun characterDeliveryStyle(temperament: String?): String {
-    val note = temperament?.trim()?.trimEnd('.', ' ')?.takeIf { it.isNotBlank() }
-    val frame = "Warm, natural storytelling by one speaker, close and conversational, as if to a " +
-        "single listener."
-    val limits = "In character but understated — a good raconteur, not an actor. No theatrical " +
-        "projection, no melodrama, no exaggerated accent, no shouting or whispering."
-    if (note == null) return "$frame $limits"
-    return "$frame This teller's temperament, carried as attitude and never as an impression of a " +
-        "voice: ${note.take(240)}. $limits"
-}
-
-/**
  * Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts`).
  *
  * This replaces the old Cloud Text-to-Speech call. The model takes the script as a verbatim
- * transcript and the delivery as structured metadata:
+ * transcript and the performance as structured metadata:
  *
  *  - `generationConfig.responseModalities` is `["AUDIO"]`.
  *  - `generationConfig.speechConfig.voiceConfig.voice` names a prebuilt voice.
- *  - the text part carries `speech_metadata.style`, a sustained direction for the delivery; this
- *    app always sends [characterDeliveryStyle] for the chosen guide.
+ *  - the text part carries `speech_metadata.style`, a sustained direction for the delivery — the
+ *    style the narration prompt returns for this stop.
  *
  * The transcript is sent as one continuous block of plain speech — paragraph breaks flattened,
  * since the model reads a blank line as a change of speaker. The documented performance tags

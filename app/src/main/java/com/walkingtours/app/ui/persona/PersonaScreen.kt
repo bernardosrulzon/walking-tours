@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,20 +54,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
-import com.walkingtours.app.ai.ExplorerType
 import com.walkingtours.app.ai.Guide
-import com.walkingtours.app.ai.MAX_EXPLORER_PREFERENCES
 import com.walkingtours.app.ai.NARRATION_LANGUAGES
 
 /** Which of the two questions is on screen. */
 private enum class Step { EXPLORER, GUIDE }
 
 /**
- * The persona flow, shown before a walk begins.
+ * The guide picker, shown before a walk begins.
  *
- * One question the first time — what kind of explorer are you — and then the guides that answer
- * suggests, fetched for this tour. The explorer answer is remembered once; the guide is remembered
- * per tour, and either can be changed later from the tour page.
+ * One question — who tells this walk — answered by four guides generated for this tour, each
+ * dwelling on a different aspect of the place. The choice is remembered per tour and can be changed
+ * later from the tour page.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,22 +76,14 @@ fun PersonaScreen(
 ) {
     val personaSettings = ServiceLocator.personaSettings
     val guideController = ServiceLocator.guide
-    val persona by personaSettings.state.collectAsStateWithLifecycle()
     val aiSettings = ServiceLocator.aiSettings
     val aiState by aiSettings.state.collectAsStateWithLifecycle()
 
-    // The explorer question is skipped once it has been answered, which is what makes it asked
-    // exactly once.
-    var step by remember {
-        mutableStateOf(if (persona.explorers.isEmpty()) Step.EXPLORER else Step.GUIDE)
-    }
     var guides by remember { mutableStateOf<List<Guide>?>(null) }
-    val explorers = persona.explorers
 
-    LaunchedEffect(step, explorers, aiState.narrationLanguage) {
-        if (step != Step.GUIDE || explorers.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(tourId, aiState.narrationLanguage) {
         guides = null
-        guides = guideController.suggestGuides(tourId, explorers)
+        guides = guideController.suggestGuides(tourId)
     }
 
     Scaffold(
@@ -116,137 +105,28 @@ fun PersonaScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
-            when (step) {
-                Step.EXPLORER -> ExplorerStep(initial = persona.explorers) { picked ->
-                    personaSettings.setExplorers(picked)
-                    step = Step.GUIDE
-                }
-
-                Step.GUIDE -> GuideStep(
-                    explorers = explorers,
-                    guides = guides,
-                    language = aiState.narrationLanguage,
-                    onLanguage = { tag -> aiSettings.update { it.copy(narrationLanguage = tag) } },
-                    onChangeExplorer = { step = Step.EXPLORER },
-                    onPick = { guide ->
-                        personaSettings.setGuide(tourId, guide)
-                        // The voice follows the guide's gender, so a guide never sounds like the
-                        // wrong person. Applied here, where the choice is made, and re-checked
-                        // before every play in case the voice was changed afterwards.
-                        guideController.ensureVoiceMatchesGuide(tourId)
-                        onDone()
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExplorerStep(
-    initial: List<ExplorerType>,
-    onContinue: (List<ExplorerType>) -> Unit,
-) {
-    var selected by remember { mutableStateOf(initial) }
-
-    Text(
-        text = "What kind of explorer are you?",
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Spacer(Modifier.height(6.dp))
-    Text(
-        text = "Pick up to three, in the order that matters most to you. Your guide leads with the " +
-            "first and weaves in the rest. You answer this once, and you can change it later.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(16.dp))
-
-    ExplorerType.entries.forEach { type ->
-        val rank = selected.indexOf(type)
-        val isSelected = rank >= 0
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .clickable {
-                    selected = when {
-                        isSelected -> selected - type
-                        selected.size < MAX_EXPLORER_PREFERENCES -> selected + type
-                        else -> selected
-                    }
+            GuideStep(
+                guides = guides,
+                language = aiState.narrationLanguage,
+                onLanguage = { tag -> aiSettings.update { it.copy(narrationLanguage = tag) } },
+                onPick = { guide ->
+                    personaSettings.setGuide(tourId, guide)
+                    // The voice follows the guide's gender, so a guide never sounds like the
+                    // wrong person. Applied here, where the choice is made, and re-checked
+                    // before every play in case the voice was changed afterwards.
+                    guideController.ensureVoiceMatchesGuide(tourId)
+                    onDone()
                 },
-            colors = CardDefaults.cardColors(
-                containerColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surface
-                },
-            ),
-        ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(type.emoji, style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = type.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "${rank + 1}",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-                }
-            }
+            )
         }
-    }
-
-    Spacer(Modifier.height(8.dp))
-    if (selected.size >= MAX_EXPLORER_PREFERENCES) {
-        Text(
-            text = "That's your top three. Tap one to swap it out.",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-    }
-
-    Button(
-        onClick = { onContinue(selected) },
-        enabled = selected.isNotEmpty(),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(if (selected.isEmpty()) "Pick at least one" else "Continue")
     }
 }
 
 @Composable
 private fun GuideStep(
-    explorers: List<ExplorerType>,
     guides: List<Guide>?,
     language: String,
     onLanguage: (String) -> Unit,
-    onChangeExplorer: () -> Unit,
     onPick: (Guide) -> Unit,
 ) {
     Text(
@@ -256,24 +136,14 @@ private fun GuideStep(
     )
     Spacer(Modifier.height(6.dp))
     Text(
-        text = if (explorers.isNotEmpty()) {
-            "Four voices for this walk, chosen for ${explorers.joinToString(", then ") { it.label }}. " +
-                "This is who you'll hear at every stop."
-        } else {
-            "Four voices for this walk. This is who you'll hear at every stop."
-        },
+        text = "Four voices for this walk, each dwelling on a different side of it — the choice is " +
+            "what you want more of. This is who you'll hear at every stop.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(16.dp))
-    // One compact control row: change the interests on the left, pick the language on the right.
+    // One compact control row: the language on the right, since the guide cards fill the rest.
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(
-            onClick = onChangeExplorer,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-        ) {
-            Text("Change interests", style = MaterialTheme.typography.labelLarge)
-        }
         Spacer(Modifier.weight(1f))
         LanguageDropdown(selected = language, onSelect = onLanguage)
     }
@@ -344,7 +214,7 @@ private fun LanguageDropdown(selected: String, onSelect: (String) -> Unit) {
 @Composable
 private fun GuideCard(guide: Guide, modifier: Modifier, onPick: (Guide) -> Unit) {
     Card(
-        modifier = modifier.height(168.dp).clickable { onPick(guide) },
+        modifier = modifier.height(196.dp).clickable { onPick(guide) },
         // A quiet surface with a hairline edge, rather than a block of primary blue: the colour was
         // competing with the avatar and made the grid look washed out.
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -377,13 +247,27 @@ private fun GuideCard(guide: Guide, modifier: Modifier, onPick: (Guide) -> Unit)
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+            if (guide.angle.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                // The aspect is the real difference between the four cards, so it is the line the eye
+                // lands on: the label colour, above the tagline rather than below it.
+                Text(
+                    text = guide.angle,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
             if (guide.tagline.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = guide.tagline,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                 )
@@ -406,7 +290,7 @@ private fun GuideCardSkeleton(modifier: Modifier = Modifier) {
         label = "guide-skeleton-alpha",
     )
     Card(
-        modifier = modifier.height(168.dp),
+        modifier = modifier.height(196.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {

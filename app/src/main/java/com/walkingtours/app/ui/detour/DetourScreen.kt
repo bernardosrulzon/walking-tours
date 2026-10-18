@@ -100,7 +100,7 @@ fun DetourScreen(
     val topic = topics?.find { it.id == topicId }
 
     // The controller's own signature, so the effect below re-fires exactly when the cached
-    // text would change: guide, interests, tone or language.
+    // text would change: guide, angle, tone or language.
     val signature = guide.detourSignature(tourId)
     val detourKey = "detour|$topicId"
     // Read through the controller helper, not a local signature computation: it covers the

@@ -6,28 +6,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
-/** How many explorer answers a walker may keep, most important first. */
-const val MAX_EXPLORER_PREFERENCES = 3
-
-/** The walker's persona: their ranked explorer preferences, and the guide chosen for each tour. */
+/** The walker's persona: the guide chosen for each tour, and how they asked it to tell it. */
 data class PersonaState(
-    /** Up to [MAX_EXPLORER_PREFERENCES] answers, most important first. */
-    val explorers: List<ExplorerType> = emptyList(),
     val guidesByTour: Map<String, Guide> = emptyMap(),
     /** Per-tour quick feedback on the telling, folded into every rewrite for that tour. */
     val toneByTour: Map<String, String> = emptyMap(),
 ) {
-    /** The top preference, or null before the question has been answered. */
-    val primaryExplorer: ExplorerType? get() = explorers.firstOrNull()
-
     fun guide(tourId: String): Guide? = guidesByTour[tourId]
 
     fun tone(tourId: String): String? = toneByTour[tourId]?.takeIf { it.isNotBlank() }
 }
 
 /**
- * Persists the persona: the ranked explorer answers (asked once), the chosen guide per tour, and any
- * per-tour feedback on how the guide should tell it.
+ * Persists the persona: the chosen guide per tour, and any per-tour feedback on how the guide should
+ * tell it.
  *
  * Kept small and dependency-free like [AiSettings], and separate from it because this is content —
  * who is telling the story, and how — rather than configuration. Nothing here touches the database.
@@ -41,12 +33,6 @@ class PersonaSettings(context: Context) {
     val state: StateFlow<PersonaState> = _state.asStateFlow()
 
     val current: PersonaState get() = _state.value
-
-    fun setExplorers(explorers: List<ExplorerType>) {
-        val capped = explorers.distinct().take(MAX_EXPLORER_PREFERENCES)
-        prefs.edit().putString(KEY_EXPLORERS, capped.joinToString(",") { it.id }).apply()
-        _state.value = _state.value.copy(explorers = capped)
-    }
 
     fun setGuide(tourId: String, guide: Guide) {
         val guides = _state.value.guidesByTour + (tourId to guide)
@@ -70,25 +56,10 @@ class PersonaSettings(context: Context) {
         _state.value = _state.value.copy(toneByTour = tones)
     }
 
-    private fun load(): PersonaState {
-        val raw = prefs.getString(KEY_EXPLORERS, null)
-        val explorers = if (!raw.isNullOrBlank()) {
-            raw.split(",")
-                .mapNotNull { ExplorerType.fromId(it.trim()) }
-                .distinct()
-                .take(MAX_EXPLORER_PREFERENCES)
-        } else {
-            // Before ranking existed there was a single answer; carry it over rather than re-ask.
-            ExplorerType.fromId(prefs.getString(KEY_LEGACY_EXPLORER, null))
-                ?.let { listOf(it) }
-                .orEmpty()
-        }
-        return PersonaState(
-            explorers = explorers,
-            guidesByTour = decodeGuides(prefs.getString(KEY_GUIDES, null)),
-            toneByTour = decodeTones(prefs.getString(KEY_TONES, null)),
-        )
-    }
+    private fun load(): PersonaState = PersonaState(
+        guidesByTour = decodeGuides(prefs.getString(KEY_GUIDES, null)),
+        toneByTour = decodeTones(prefs.getString(KEY_TONES, null)),
+    )
 
     private fun encodeGuides(guides: Map<String, Guide>): String {
         val root = JSONObject()
@@ -103,7 +74,12 @@ class PersonaSettings(context: Context) {
             buildMap {
                 root.keys().forEach { tourId ->
                     root.optJSONObject(tourId)?.let { json ->
-                        Guide.fromJson(json)?.let { guide -> put(tourId, guide) }
+                        // A persona saved before guides carried an angle is no longer a valid choice —
+                        // the four cards would read alike and the prompt would have nothing to dwell
+                        // on — so it is dropped and the walker picks again.
+                        Guide.fromJson(json)
+                            ?.takeIf { it.angle.isNotBlank() }
+                            ?.let { guide -> put(tourId, guide) }
                     }
                 }
             }
@@ -123,8 +99,6 @@ class PersonaSettings(context: Context) {
     }
 
     private companion object {
-        const val KEY_EXPLORERS = "explorer_types"
-        const val KEY_LEGACY_EXPLORER = "explorer_type"
         const val KEY_GUIDES = "guides_by_tour"
         const val KEY_TONES = "tones_by_tour"
     }

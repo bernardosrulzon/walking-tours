@@ -42,17 +42,16 @@ data class NarrationRequest(
 /**
  * The signature a narration is generated under.
  *
- * Everything that should invalidate a cached narration is in here: which guide is telling it, how
- * that guide speaks, what the walker asked to hear, and any feedback they left for this tour. Change
- * any of it and the old entries stop matching, so they regenerate; change none of it and the text
- * and its audio are reused.
+ * Everything that should invalidate a cached narration is in here: which guide is telling it, what
+ * that guide dwells on, how it speaks, and any feedback the walker left for this tour. Change any of
+ * it and the old entries stop matching, so they regenerate; change none of it and the text and its
+ * audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "16"
+const val NARRATION_PROMPT_VERSION = "17"
 
 fun guideSignature(
     guide: Guide?,
-    explorers: List<ExplorerType>,
     tone: String?,
     language: String = NARRATION_LANGUAGE,
 ): String? =
@@ -61,7 +60,7 @@ fun guideSignature(
             NARRATION_PROMPT_VERSION,
             it.id,
             it.style,
-            explorers.joinToString(",") { explorer -> explorer.id },
+            it.angle,
             tone.orEmpty(),
             language,
         ).joinToString("|")
@@ -70,8 +69,8 @@ fun guideSignature(
 /**
  * The guide personas, and the narration they tell.
  *
- * Two jobs. It proposes five guides for a tour from the walker's ranked preferences and where the
- * tour is, and — once a guide is chosen — it rewrites one narration at a time, on demand.
+ * Two jobs. It proposes four guides for a tour, each dwelling on a different aspect of the place, and
+ * — once a guide is chosen — it rewrites one narration at a time, on demand.
  *
  * Each rewrite returns both the words and a delivery [SpokenLine.style]. The words may carry inline
  * vocal tags (`<laugh>`, `<sigh>`, `<short pause>`) where a moment calls for one; the engine performs
@@ -115,12 +114,11 @@ class GuideController(
 
     private var model: String? = null
 
-    /** The signature the current guide, preferences and tone produce for [tourId], or null. */
+    /** The signature the current guide and tone produce for [tourId], or null. */
     fun signatureFor(tourId: String): String? {
         val persona = personaSettings.current
         return guideSignature(
             persona.guide(tourId),
-            persona.explorers,
             persona.tone(tourId),
             settings.current.narrationLanguage,
         )
@@ -154,17 +152,17 @@ class GuideController(
     }
 
     /**
-     * Four guide options for [tourId] and these ranked preferences, or the built-in fallbacks when
-     * the model cannot be reached. Never throws.
+     * Four guides for [tourId], each dwelling on a different aspect of the place, or the built-in
+     * fallbacks when the model cannot be reached. Never throws.
      */
-    suspend fun suggestGuides(tourId: String, explorers: List<ExplorerType>): List<Guide> {
+    suspend fun suggestGuides(tourId: String): List<Guide> {
         val language = settings.current.narrationLanguage
-        val cacheId = "$tourId|${explorers.joinToString(",") { it.id }}|$language"
+        val cacheId = "$tourId|$language"
         guideSuggestions[cacheId]?.let { return it }
         if (!settings.current.hasGeminiKey) return fallbackGuides(language)
         val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return fallbackGuides(language)
         val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
-        val guides = runCatching { requestGuides(tour, stops, explorers, language) }
+        val guides = runCatching { requestGuides(tour, stops, language) }
             .onFailure { Log.w(TAG, "Guide suggestion failed; using fallback guides", it) }
             .getOrNull()
             ?.takeIf { it.size >= 3 }
@@ -207,7 +205,6 @@ class GuideController(
             }
         val signature = guideSignature(
             guide,
-            persona.explorers,
             persona.tone(tourId),
             settings.current.narrationLanguage,
         ) ?: return SpokenLine(request.authored, null)
@@ -258,7 +255,6 @@ class GuideController(
     private suspend fun requestGuides(
         tour: TourEntity,
         stops: List<StopEntity>,
-        explorers: List<ExplorerType>,
         language: String,
     ): List<Guide> {
         val languageName = if (language == NARRATION_LANGUAGE_PT_BR) {
@@ -271,24 +267,20 @@ class GuideController(
             systemInstruction = GUIDE_SYSTEM,
             history = emptyList(),
             prompt = buildString {
-                if (explorers.isNotEmpty()) {
-                    appendLine("The walker's interests, in order of priority: ${preferences(explorers)}.")
-                } else {
-                    appendLine("The walker has no stated preference; make the guides broadly different.")
-                }
                 appendLine("The tour is \"${tour.title}\" in ${tour.city}, ${tour.country}.")
                 appendLine("Summary: ${tour.summary}")
                 if (stops.isNotEmpty()) {
                     appendLine("The stops, in order: ${stops.joinToString(", ") { it.name }}.")
                 }
                 appendLine()
-                appendLine("Invent exactly 4 distinct guide personalities to narrate this walk to that walker: 2 contemporary, everyday guides (a local, a professional, a neighbor — people who could plausibly walk this route today) and 2 voices from old professions that belong to this place and era (a ferryman, a scribe, a spice merchant — never an archivist, curator, or historian).")
+                appendLine("Invent exactly 4 distinct guide personalities to narrate this walk: 2 contemporary, everyday guides (a local, a professional, a neighbor — people who could plausibly walk this route today) and 2 voices from old professions that belong to this place and era (a ferryman, a scribe, a spice merchant — never an archivist, curator, or historian).")
+                appendLine("Each guide dwells on one aspect of this place. Read the tour above and choose the four aspects THIS walk actually rewards — its history, its religion and ritual, its architecture and craft, its food and daily life, its trade and power, its legends, its music, its wars. A guide whose aspect the stops can feed is a good guide; one whose aspect this place has nothing to say about is a wasted choice. No two guides may share an aspect, and together the four should cover what makes this walk worth taking.")
                 appendLine("Each must have a memorable human name — a first name plus a short epithet — that fits ${tour.city}, and a genuinely different temperament. No two should sound alike, and they should not be four versions of the same curious local; the old-profession voices must feel lived-in, not academic: they worked here, they did not study it.")
-                appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
-                appendLine("The set should collectively lean into the walker's priorities, with the strongest match to their top interest offered first.")
-                appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. The walker's interests are a lens on the place, never a reason to pick a guide whose character does not fit it.")
-                appendLine("Write each guide's name and tagline in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
-                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), style (one sentence on how this guide speaks, for a narrator to imitate) and gender (\"feminine\" or \"masculine\", whichever the character is).")
+                appendLine("All four must be company a walker would keep for fifteen minutes: witty, never wacky. Distinct temperaments, not caricatures — no catchphrase-driven characters, no heavy dialect, no one-note obsessions, no shouting or whispering voices. A trait that charms in a paragraph and grates by the fourth stop is a failure; one light touch, held steadily, beats a loud act.")
+                appendLine("Keep every character grounded and instantly legible to a newcomer: recognizable people, not exotic caricatures, and plain words throughout the name, epithet and tagline. A guide is a person — never an animal, a mascot, an object or a collective. Never use an insider profession term as the epithet — \"boatman\" is clear, \"majhi\" means nothing to someone choosing a guide; \"tea seller\", not \"chaiwale\"; \"pilgrim priest\", not \"tirtha purohit\". If a local word appears at all, its meaning must be obvious from the words around it.")
+                appendLine("But the place comes first. Every guide must make sense for this tour and this place — a chef would be absurd at an aviation museum, a mystic odd in a rose garden. An aspect is a lens on the place, never a reason to pick a guide whose character does not fit it.")
+                appendLine("Write each guide's name, tagline and angle in $languageName, idiomatic and natural in that language — a Portuguese epithet, not a translation of an English one. The \"style\" field stays in English, as an instruction to the narrator.")
+                append("Reply with ONLY a JSON array of 4 objects, each with keys name, tagline (max 12 words), angle (the aspect this guide dwells on, two to eight words in $languageName, e.g. \"architecture and craft\"), style (one sentence on how this guide speaks, for a narrator to imitate) and gender (\"feminine\" or \"masculine\", whichever the character is).")
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,
@@ -302,13 +294,6 @@ class GuideController(
         }
     }
 
-    /** A ranked, human-readable list of the walker's interests for the prompts. */
-    private fun preferences(explorers: List<ExplorerType>): String =
-        explorers
-            .take(MAX_EXPLORER_PREFERENCES)
-            .mapIndexed { index, explorer -> "${index + 1}. ${explorer.label} (${explorer.brief})" }
-            .joinToString("; ")
-
     private suspend fun rewrite(tourId: String, guide: Guide, request: NarrationRequest): SpokenLine {
         val persona = personaSettings.current
         val tour = repository.getTour(tourId)
@@ -317,7 +302,6 @@ class GuideController(
             systemInstruction = narrationSystem(
                 tour,
                 guide,
-                persona.explorers,
                 persona.tone(tourId),
                 request.isIntroduction,
                 settings.current.narrationLanguage,
@@ -339,7 +323,6 @@ class GuideController(
     private fun narrationSystem(
         tour: TourEntity?,
         guide: Guide,
-        explorers: List<ExplorerType>,
         tone: String?,
         isIntroduction: Boolean,
         language: String,
@@ -348,6 +331,9 @@ class GuideController(
         appendLine("You are ${guide.name}. ${guide.tagline}")
         appendLine("You are the voice of an audio walking tour in ${tour?.city ?: "this city"}.")
         appendLine("Speak in this style: ${guide.style}")
+        if (guide.angle.isNotBlank()) {
+            appendLine("What you dwell on: ${guide.angle}. This is your angle on the place, and the reason the walker chose you over the other guides. Take the walker further into it than the script does: the mechanism, the belief, the craft, the money, the people who lived it. A stop where every guide would say the same thing is a stop where you are not earning your place.")
+        }
         if (portuguese) {
             appendLine()
             appendLine("Write the entire narration in Brazilian Portuguese (português do Brasil): every")
@@ -384,19 +370,14 @@ class GuideController(
             appendLine("Do not introduce yourself and do not greet the walker: the introduction already did")
             appendLine("that. Start straight in on the place in front of them.")
         }
-        if (explorers.isNotEmpty()) {
-            appendLine("The walker's interests, in order of priority: ${preferences(explorers)}. Let the first")
-            appendLine("weigh most heavily, then the others; decide what you dwell on, what you cut and what")
-            appendLine("you get excited about from all of them.")
-        }
-        appendLine("The place comes first. Your interests and any adjustment shape what you notice and how")
-        appendLine("you tell it, but never force a topic, a joke or a tone that does not fit what is actually")
-        appendLine("here. If an interest has nothing to say about this stop, let it go and tell the stop well.")
+        appendLine("Dwell on your angle, but never force it: this stop comes first, and a stop with nothing")
+        appendLine("for your angle is told plainly and well. What you add has to be true of this place, here,")
+        appendLine("in front of the walker — your angle is a lens on the place, never a reason to invent one.")
         appendLine()
-        appendLine("Adapt the script to your voice and experience: restructure it, change the emphasis")
-        appendLine("and the framing, cut what drags, add relevant color and asides only you would know. But the")
-        appendLine("fallback script is the spine — keep its storyline, its stops and its facts. Adapt it, do not")
-        appendLine("overhaul it: a walker who heard both versions should recognize the same walk, told by you.")
+        appendLine("Adapt the script to your voice and your angle: restructure it, change the emphasis and")
+        appendLine("the framing, cut what drags, and go deeper wherever your angle has something to add. But")
+        appendLine("the fallback script is the spine — keep its storyline, its stops and its facts, so a walker")
+        appendLine("who heard both versions recognizes the same walk, told by you.")
         appendLine()
         appendLine("Stay in character the whole way, but do not overdo it. The persona is a voice and a way")
         appendLine("of noticing, not a costume: speak as the character would, and let the performance serve")
@@ -415,15 +396,18 @@ class GuideController(
         appendLine("on a fact.")
         appendLine()
         appendLine("The only things to hold on to:")
-        appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
-        appendLine("  or sights that were not there. Reframing is welcome; fabrication is not.")
+        appendLine("- Stay truthful. The script's names, dates, places and figures stay accurate, and you never")
+        appendLine("  invent a fact, a number or a sight that was not there. Detail your angle makes you notice")
+        appendLine("  is welcome — how the dome was built, what the ritual means, who paid for the fountain — as")
+        appendLine("  long as you are sure of it. When you are not sure, leave it out: a missing detail costs")
+        appendLine("  nothing, a wrong one costs the walker's trust.")
         appendLine("- Assume the walker knows nothing about this city or country. Explain every local term,")
         appendLine("  currency unit, historical actor and religious concept inline, on first use, in a breath:")
         appendLine("  who the Mughals were, what a lakh is, what a panda does, what moksha promises. Never")
         appendLine("  use a word the walker cannot be expected to know without unpacking it right there.")
-        appendLine("- Aim for about three minutes spoken, roughly 400 to 450 words. Shorter beats longer —")
-        appendLine("  except the introduction, which may run to about five minutes when the city's context")
-        appendLine("  demands it. Clarity first, always.")
+        appendLine("- Aim for about three minutes spoken, roughly 400 to 500 words — up to about 550 when your")
+        appendLine("  angle has real material to add. Shorter beats longer, and the introduction may run to")
+        appendLine("  about five minutes when the city's context demands it. Clarity first, always.")
         appendLine("- Write for the ear: second person, present tense, plain prose. No markdown, no lists,")
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")
@@ -585,7 +569,7 @@ class GuideController(
             NARRATION_PROMPT_VERSION,
             guide?.id ?: "neutral",
             guide?.style.orEmpty(),
-            persona.explorers.joinToString(",") { it.id },
+            guide?.angle.orEmpty(),
             persona.tone(tourId).orEmpty(),
             settings.current.narrationLanguage,
         ).joinToString("|")
@@ -657,7 +641,6 @@ class GuideController(
             systemInstruction = detourSystem(
                 tour,
                 guide,
-                persona.explorers,
                 persona.tone(tourId),
                 settings.current.narrationLanguage,
                 topic,
@@ -677,7 +660,6 @@ class GuideController(
     private fun detourSystem(
         tour: TourEntity?,
         guide: Guide?,
-        explorers: List<ExplorerType>,
         tone: String?,
         language: String,
         topic: DetourTopic,
@@ -689,6 +671,9 @@ class GuideController(
         appendLine("You are ${voice.name}. ${voice.tagline}")
         appendLine("You are telling a walker standing in ${tour?.city ?: "this city"}, ${tour?.country ?: ""} about \"${topic.title}\": ${topic.blurb}")
         appendLine("Speak in this style: ${voice.style}")
+        if (voice.angle.isNotBlank()) {
+            appendLine("What you dwell on: ${voice.angle}. Take the walker further into it than a guidebook would: the mechanism, the belief, the craft, the money, the people.")
+        }
         if (portuguese) {
             appendLine()
             appendLine("Write everything in Brazilian Portuguese (português do Brasil), except proper names")
@@ -708,9 +693,6 @@ class GuideController(
         appendLine("what it is, why it matters here, and the one or two things a newcomer most needs to")
         appendLine("grasp. Assume the walker knows nothing about this country: explain every local term,")
         appendLine("name and institution inline, on first use, in a breath.")
-        if (explorers.isNotEmpty()) {
-            appendLine("Their interests, in order: ${preferences(explorers)} — lean into those angles.")
-        }
         appendLine("The place comes first: stay with this country and city, never drift into general travel")
         appendLine("advice. Where people disagree, say so in one breath; never take a side, never dunk.")
         appendLine("Keep the delivery calm and measured: conversational, never theatrical or melodramatic.")
@@ -720,9 +702,9 @@ class GuideController(
         appendLine("openers. Humor is delivery, never a substitute: every joke must land on a fact.")
         appendLine()
         appendLine("The only things to hold on to:")
-        appendLine("- Stay truthful. Names, dates and places stay accurate, and do not invent facts, figures")
-        appendLine("  or sights that were not there. Reframing is welcome; fabrication is not. If you are")
-        appendLine("  unsure of something, leave it out rather than guessing.")
+        appendLine("- Stay truthful. Names, dates and places stay accurate, and you never invent a fact, a")
+        appendLine("  figure or a sight that was not there. Detail your angle makes you notice is welcome, as")
+        appendLine("  long as you are sure of it; if you are unsure, leave it out rather than guessing.")
         appendLine("- Write for the ear: second person where natural, plain prose. No markdown, no lists,")
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")

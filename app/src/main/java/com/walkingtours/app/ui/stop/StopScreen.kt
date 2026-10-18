@@ -139,13 +139,12 @@ fun StopScreen(
     val guideLoading by guide.loading.collectAsStateWithLifecycle()
     val persona by ServiceLocator.personaSettings.state.collectAsStateWithLifecycle()
 
-    // What every cached narration is keyed by today: the guide, the walker's ranked interests,
-    // any feedback they left, and the narration language. Read from the collected persona (and
-    // settings), so a change recomposes the page.
+    // What every cached narration is keyed by today: the guide (with its angle), any feedback they
+    // left, and the narration language. Read from the collected persona (and settings), so a change
+    // recomposes the page.
     val aiSettings by ServiceLocator.aiSettings.state.collectAsStateWithLifecycle()
     val narrationSignature = guideSignature(
         persona.guide(tourId),
-        persona.explorers,
         persona.tone(tourId),
         aiSettings.narrationLanguage,
     )
@@ -662,8 +661,8 @@ fun StopScreen(
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                 }
-                                // Same tuning as a stop: change the guide/interests, or leave quick
-                                // feedback that rewrites this introduction too.
+                                // Same tuning as a stop: change the guide, or leave quick feedback that
+                                // rewrites this introduction too.
                                 IconButton(onClick = { showTune = true }) {
                                     Icon(
                                         Icons.Filled.ThumbsUpDown,
@@ -780,8 +779,8 @@ fun StopScreen(
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                 }
-                                // Tune the telling for this walk: change the guide or interests, or
-                                // leave quick feedback ("more direct, fewer jokes").
+                                // Tune the telling for this walk: change the guide, or leave quick
+                                // feedback ("more direct, fewer jokes").
                                 IconButton(onClick = { showTune = true }) {
                                     Icon(
                                         Icons.Filled.ThumbsUpDown,
@@ -956,8 +955,8 @@ fun StopScreen(
 }
 
 /**
- * Guide tuning: change the guide or the walker's interests, or leave quick feedback that the
- * guide folds into every rewrite for this tour. Tour-wide, not per-stop — the title says so.
+ * Guide tuning: change the guide, or leave quick feedback that the guide folds into every
+ * rewrite for this tour. Tour-wide, not per-stop — the title says so.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1026,7 +1025,7 @@ private fun TuneStopSheet(
             Spacer(Modifier.height(14.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onChangeGuide) { Text("Change guide or interests") }
+                TextButton(onClick = onChangeGuide) { Text("Change guide") }
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = { onApply(note) },

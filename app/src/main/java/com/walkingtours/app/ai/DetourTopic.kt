@@ -12,6 +12,7 @@ val NEUTRAL_DETOUR_GUIDE = Guide(
     name = "A knowledgeable local",
     tagline = "",
     style = "warm, clear and unhurried; explains context like a good museum audioguide",
+    angle = "the context a newcomer needs",
 )
 
 /**

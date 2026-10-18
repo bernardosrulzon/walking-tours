@@ -52,7 +52,7 @@ object ServiceLocator {
 
     val aiSettings: AiSettings by lazy { AiSettings(appContext) }
 
-    /** The walker's persona: the explorer answer, and the chosen guide per tour. */
+    /** The walker's persona: the guide chosen for each tour, and how they asked it to tell it. */
     val personaSettings: PersonaSettings by lazy { PersonaSettings(appContext) }
 
     val geminiTtsClient: GeminiTtsClient by lazy {

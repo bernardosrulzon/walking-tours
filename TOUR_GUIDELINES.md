@@ -146,16 +146,23 @@ Respect beats coverage: no cremation close-ups at Manikarnika, no photo of the K
 ## 8. Guide personas: adapt, don't overhaul
 
 The authored narration is the fallback every persona starts from, and it is the spine they keep.
-A persona adapts the storyline to its style — restructuring, reframing, adding relevant color and
-asides only it would know — but it must not completely overhaul the fallback content. A walker who
-heard two personas' versions should recognize the same walk, told differently. Style, interests and
-feedback shape *how* it is told; the fallback decides *what* is told.
+A persona adapts the storyline to its angle — its aspect of the place — and to its style:
+restructuring, reframing, and going deeper wherever its angle has something real to add. But it must
+not completely overhaul the fallback content: a walker who heard two personas' versions should
+recognize the same walk, told differently. The angle and the style shape *how* it is told and what it
+dwells on; the fallback decides *what* is told, and its facts survive. Added detail has to be true of
+this place; when the persona is unsure, it leaves the detail out.
+
+There is no interest question any more: the four guides offered for a tour are chosen for that tour,
+each dwelling on a different aspect the stops can actually feed (history, religion, architecture,
+food and daily life, trade and power, legend — whatever this walk rewards). Picking a guide is
+picking what you want more of.
 
 ## 10. Detours: generated side chapters
 
 Detours are country-level deep-dives (history, geopolitics, culture, religion, economy) generated
 per tour at runtime — there is no authored text, so nothing here lives in the JSON. The same voice
-rules apply: truth first, interests as a lens, plain words for newcomers, no sides taken. Topics
+rules apply: truth first, the guide's angle as a lens, plain words for newcomers, no sides taken. Topics
 stay at the big picture — broad chapter headings like "Food – what to eat here", never one stop,
 sight, dish or battle. Topic titles must state the subject plainly at a glance ("Religion in Turkey
 today", not "the politics of the holy space") — neither generic enough to fit anywhere nor so

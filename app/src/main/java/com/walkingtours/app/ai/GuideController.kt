@@ -48,7 +48,7 @@ data class NarrationRequest(
  * audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "17"
+const val NARRATION_PROMPT_VERSION = "18"
 
 fun guideSignature(
     guide: Guide?,
@@ -407,8 +407,10 @@ class GuideController(
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
-        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
-        appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. How often they appear is part of")
+        appendLine("  your character: let it follow your temperament and the moment, not a quota. A dry guide")
+        appendLine("  may use none in a stop; a warm, animated one may use several. A tag in every sentence")
+        appendLine("  is a performer milking the part, not a person telling a story.")
         appendLine()
         appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
         appendLine("the mood of this stop (for example \"calm and conversational, unhurried\").")
@@ -702,8 +704,10 @@ class GuideController(
         appendLine("  no headings, no bracketed stage directions. Keep a blank line between paragraphs —")
         appendLine("  the transcript shows them as separate paragraphs.")
         appendLine("- Drop non-verbal sounds inline in the text where they happen, in angle brackets:")
-        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. Use them rarely — at most once")
-        appendLine("  or twice per narration — only where a real teller would, never a tag in every sentence.")
+        appendLine("  <laugh>, <sigh>, <breath>, <cough>, <short pause>. How often they appear is part of")
+        appendLine("  your character: let it follow your temperament and the moment, not a quota. A dry guide")
+        appendLine("  may use none in a stop; a warm, animated one may use several. A tag in every sentence")
+        appendLine("  is a performer milking the part, not a person telling a story.")
         appendLine()
         appendLine("Also give a sustained style direction for the whole delivery, matching this voice and")
         appendLine("the mood of the subject (for example \"warm and unhurried\").")

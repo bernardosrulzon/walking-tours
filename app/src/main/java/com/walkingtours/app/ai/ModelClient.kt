@@ -23,14 +23,14 @@ data class ChatMessage(
 const val TEXT_MODEL = "gemini-3.8-flash"
 
 /**
- * The model used through OpenCode.
+ * The model used through OpenCode Go: DeepSeek V4.1 Flash.
  *
- * Same model as the Google transport, on OpenCode's Gemini-compatible path: the app keeps one
- * request and response shape and only the transport changes. Note that the **Go** subscription does
- * not serve Gemini 3.8 Flash (its only Gemini model is Gemini 4 Argon, which this app does not use);
- * this is OpenCode's pay-as-you-go Console family, and needs Console credits.
+ * Go serves it on the OpenAI Chat Completions API, so the OpenCode transport speaks that shape
+ * rather than Gemini's. The Go plan includes it, it accepts images, and it follows the app's JSON
+ * contracts. It reasons by default, but `reasoning_effort: "none"` switches that off for the
+ * structured rewrites, where hidden thinking would otherwise eat the output budget.
  */
-const val OPENCODE_MODEL = "gemini-3.8-flash"
+const val OPENCODE_MODEL = "deepseek-v4.1-flash"
 
 /** Identifies this app to OpenCode — a product name, not a generic SDK or HTTP library. */
 const val MODEL_USER_AGENT = "walking-tours/1.0"
@@ -41,7 +41,7 @@ const val MODEL_USER_AGENT = "walking-tours/1.0"
  * It talks to one of two providers, chosen in Settings and defaulting to Google Gemini, since
  * both run Gemini 3.8 Flash and Google works without extra credits:
  *
- *  - **OpenCode** (`https://opencode.ai/inference/...`) with a service-account key. The gateway asks
+ *  - **OpenCode Go** (`https://opencode.ai/inference/go/...`) with a service-account key. Go asks
  *    clients to identify themselves with their own User-Agent and to send a stable
  *    `x-opencode-session` per conversation, which is what [generate]'s `session` argument is for.
  *  - **Google Gemini** directly, with the Google key and the app-identity headers.
@@ -112,7 +112,7 @@ class ModelClient(
         session: String = "default",
     ): String {
         val state = settings.current
-        val body = buildBody(
+        val body = buildGeminiBody(
             systemInstruction = systemInstruction,
             history = history,
             prompt = prompt,
@@ -121,29 +121,36 @@ class ModelClient(
             thinkingBudget = thinkingBudget,
         )
 
-        val json = if (state.modelProvider == MODEL_PROVIDER_OPENCODE) {
+        if (state.modelProvider == MODEL_PROVIDER_OPENCODE) {
             val key = requireOpenCodeKey(state)
-            AiHttp.postJson(
-                "$OPENCODE_BASE/models/$OPENCODE_MODEL:generateContent",
-                body,
+            val json = AiHttp.postJson(
+                OPENCODE_CHAT_URL,
+                buildOpenAiBody(
+                    systemInstruction = systemInstruction,
+                    history = history,
+                    prompt = prompt,
+                    images = images,
+                    maxOutputTokens = maxOutputTokens,
+                    thinkingBudget = thinkingBudget,
+                ),
                 openCodeHeaders(state, key, session),
                 readTimeoutMs = GENERATE_TIMEOUT_MS,
                 serviceName = "OpenCode",
             )
-        } else {
-            val key = requireGoogleKey(state)
-            AiHttp.postJson(
-                "$GOOGLE_BASE/models/$TEXT_MODEL:generateContent?key=$key",
-                body,
-                AppIdentityHeaders.build(context),
-                readTimeoutMs = GENERATE_TIMEOUT_MS,
-            )
+            return decodeOpenAiAnswer(json)
         }
 
-        return decodeAnswer(json)
+        val key = requireGoogleKey(state)
+        val json = AiHttp.postJson(
+            "$GOOGLE_BASE/models/$TEXT_MODEL:generateContent?key=$key",
+            body,
+            AppIdentityHeaders.build(context),
+            readTimeoutMs = GENERATE_TIMEOUT_MS,
+        )
+        return decodeGeminiAnswer(json)
     }
 
-    private fun buildBody(
+    private fun buildGeminiBody(
         systemInstruction: String,
         history: List<ChatMessage>,
         prompt: String,
@@ -209,7 +216,80 @@ class ModelClient(
         }
     }
 
-    private fun decodeAnswer(json: JSONObject): String {
+    /** The OpenAI Chat Completions shape: system + history + one user turn, with data-URL images. */
+    private fun buildOpenAiBody(
+        systemInstruction: String,
+        history: List<ChatMessage>,
+        prompt: String,
+        images: List<InlineImage>,
+        maxOutputTokens: Int,
+        thinkingBudget: Int?,
+    ): JSONObject {
+        val messages = JSONArray().apply {
+            if (systemInstruction.isNotBlank()) {
+                put(JSONObject().put("role", "system").put("content", systemInstruction))
+            }
+            history.takeLast(MAX_HISTORY_TURNS).forEach { message ->
+                if (message.isError) return@forEach
+                put(
+                    JSONObject().put(
+                        "role",
+                        if (message.role == ChatRole.USER) "user" else "assistant",
+                    ).put("content", message.text),
+                )
+            }
+            val userContent: Any = if (images.isEmpty()) {
+                prompt
+            } else {
+                JSONArray().apply {
+                    if (prompt.isNotBlank()) {
+                        put(JSONObject().put("type", "text").put("text", prompt))
+                    }
+                    images.forEach { image ->
+                        put(
+                            JSONObject()
+                                .put("type", "image_url")
+                                .put(
+                                    "image_url",
+                                    JSONObject().put(
+                                        "url",
+                                        "data:${image.mimeType};base64,${image.base64}",
+                                    ),
+                                ),
+                        )
+                    }
+                }
+            }
+            put(JSONObject().put("role", "user").put("content", userContent))
+        }
+
+        return JSONObject().apply {
+            put("model", OPENCODE_MODEL)
+            put("messages", messages)
+            put("max_tokens", maxOutputTokens)
+            // The app asks for thinking off on every structured call; DeepSeek reasons by default,
+            // and its reasoning tokens share the output budget.
+            if (thinkingBudget == 0) put("reasoning_effort", "none")
+        }
+    }
+
+    private fun decodeOpenAiAnswer(json: JSONObject): String {
+        val choice = json.optJSONArray("choices")?.optJSONObject(0)
+            ?: throw AiException("The model returned no answer. Try rephrasing the question.")
+        val content = choice.optJSONObject("message")?.optString("content").orEmpty().trim()
+        if (content.isBlank()) {
+            throw AiException(
+                if (choice.optString("finish_reason") == "length") {
+                    "The model ran out of room before answering. Try a shorter question."
+                } else {
+                    "The model returned an empty answer."
+                },
+            )
+        }
+        return content
+    }
+
+    private fun decodeGeminiAnswer(json: JSONObject): String {
         // A safety block produces no candidates at all; say so plainly rather than showing "no reply".
         json.optJSONObject("promptFeedback")?.optString("blockReason")?.takeIf { it.isNotBlank() }?.let {
             throw AiException("That question was blocked by the provider's safety filters ($it).")
@@ -272,8 +352,8 @@ class ModelClient(
 
     private companion object {
         const val GOOGLE_BASE = "https://generativelanguage.googleapis.com/v1beta"
-        const val OPENCODE_BASE = "https://opencode.ai/inference/google/v1beta"
-        const val OPENCODE_MODELS_URL = "https://opencode.ai/inference/v1/models"
+        const val OPENCODE_CHAT_URL = "https://opencode.ai/inference/go/openai/v1/chat/completions"
+        const val OPENCODE_MODELS_URL = "https://opencode.ai/inference/go/v1/models"
         const val MAX_HISTORY_TURNS = 8
 
         /**

@@ -72,13 +72,13 @@ fun SettingsScreen(onBack: () -> Unit) {
     var apiStatus by remember { mutableStateOf<String?>(null) }
     var apiOk by remember { mutableStateOf<Boolean?>(null) }
     val openCode = state.modelProvider == MODEL_PROVIDER_OPENCODE
-    val providerName = if (openCode) "OpenCode" else "Gemini"
+    val providerName = if (openCode) "OpenCode Go" else "Gemini"
 
     fun checkApi() {
         if (!state.modelProviderReady) {
             apiOk = false
             apiStatus = if (openCode) {
-                "No OpenCode key in this build"
+                "No OpenCode Go key in this build"
             } else {
                 "No Gemini API key in this build"
             }
@@ -99,7 +99,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 } else {
                     apiOk = true
                     apiStatus = if (openCode) {
-                        "OpenCode key accepted \u00b7 $wanted"
+                        "OpenCode Go key accepted \u00b7 $wanted"
                     } else {
                         "Gemini API working \u00b7 $wanted"
                     }
@@ -141,8 +141,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             Text("Model provider", style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 text = if (openCode) {
-                                    "Guides, rewrites, detours and chat run through OpenCode, " +
-                                        "using Gemini 3.8 Flash."
+                                    "Guides, rewrites, detours and chat run on your OpenCode Go " +
+                                        "plan, using DeepSeek V4.1 Flash."
                                 } else {
                                     "Guides, rewrites, detours and chat run on Google Gemini, " +
                                         "billed per token."
@@ -165,9 +165,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (openCode) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "OpenCode serves Gemini 3.8 Flash through its pay-as-you-go " +
-                                "gateway. The Go subscription alone does not include it, so this " +
-                                "needs Console credits.",
+                            text = "DeepSeek V4.1 Flash is included in the Go plan, accepts photos, " +
+                                "and its provider keeps no data and does not train on prompts.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -2,7 +2,7 @@ package com.walkingtours.app
 
 import android.content.Context
 import com.walkingtours.app.ai.AiSettings
-import com.walkingtours.app.ai.GeminiClient
+import com.walkingtours.app.ai.ModelClient
 import com.walkingtours.app.ai.GuideController
 import com.walkingtours.app.ai.ElevenLabsClient
 import com.walkingtours.app.ai.GeminiTtsClient
@@ -64,16 +64,15 @@ object ServiceLocator {
         ElevenLabsClient { aiSettings.current.elevenLabsApiKey }
     }
 
-    val geminiClient: GeminiClient by lazy {
-        GeminiClient(appContext) { aiSettings.current.geminiApiKey }
-    }
+    /** Text models (guides, rewrites, detours, chat), via OpenCode Go by default. */
+    val modelClient: ModelClient by lazy { ModelClient(appContext, aiSettings) }
 
     /**
      * The guide personas and the personalised narration they produce. App-scoped so a rewrite keeps
      * running while the walker moves between screens, and so the cache outlives any one screen.
      */
     val guide: GuideController by lazy {
-        GuideController(appContext, repository, geminiClient, aiSettings, personaSettings)
+        GuideController(appContext, repository, modelClient, aiSettings, personaSettings)
     }
 
     /**
@@ -94,6 +93,6 @@ object ServiceLocator {
     }
 
     val chat: TravelChatController by lazy {
-        TravelChatController(repository, geminiClient, aiSettings, guide)
+        TravelChatController(repository, modelClient, aiSettings, guide)
     }
 }

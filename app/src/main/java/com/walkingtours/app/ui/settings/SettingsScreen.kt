@@ -47,7 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
-import com.walkingtours.app.ai.TEXT_MODEL
+import com.walkingtours.app.ai.MODEL_PROVIDERS
+import com.walkingtours.app.ai.MODEL_PROVIDER_OPENCODE
 import com.walkingtours.app.ai.THEME_MODES
 import com.walkingtours.app.ai.TTS_ENGINES
 import com.walkingtours.app.ai.TTS_ENGINE_ELEVENLABS
@@ -66,38 +67,47 @@ fun SettingsScreen(onBack: () -> Unit) {
     val state by settings.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    // Live status of the Gemini key: a models call is the cheapest real test that it works.
+    // Live status of the text-model provider: a models call is the cheapest real test that the key
+    // works, and it also proves the pinned model is offered to this account.
     var apiStatus by remember { mutableStateOf<String?>(null) }
     var apiOk by remember { mutableStateOf<Boolean?>(null) }
+    val openCode = state.modelProvider == MODEL_PROVIDER_OPENCODE
+    val providerName = if (openCode) "OpenCode Go" else "Gemini"
 
     fun checkApi() {
-        if (!state.hasGeminiKey) {
+        if (!state.modelProviderReady) {
             apiOk = false
-            apiStatus = "No Gemini API key in this build"
+            apiStatus = if (openCode) {
+                "No OpenCode Go key in this build"
+            } else {
+                "No Gemini API key in this build"
+            }
             return
         }
         apiOk = null
         apiStatus = "Checking\u2026"
         scope.launch {
             try {
-                val models = ServiceLocator.geminiClient.listModels()
+                val client = ServiceLocator.modelClient
+                val models = client.availableModels()
+                val wanted = client.activeModel
                 // The app calls one pinned model, so a working key that cannot see it is a failure
                 // worth naming here rather than in the middle of a walk.
-                if (models.none { it.id == TEXT_MODEL }) {
+                if (models.none { it == wanted }) {
                     apiOk = false
-                    apiStatus = "$TEXT_MODEL is not available on this key"
+                    apiStatus = "$wanted is not available on this key"
                 } else {
                     apiOk = true
-                    apiStatus = "Gemini API working \u00b7 $TEXT_MODEL"
+                    apiStatus = "$providerName working \u00b7 $wanted"
                 }
             } catch (e: Exception) {
                 apiOk = false
-                apiStatus = "Gemini API not working: ${e.message}"
+                apiStatus = "$providerName not working: ${e.message}"
             }
         }
     }
 
-    LaunchedEffect(Unit) { checkApi() }
+    LaunchedEffect(state.modelProvider) { checkApi() }
 
     Scaffold(
         topBar = {
@@ -116,6 +126,49 @@ fun SettingsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ---------------------------------------------------------- models
+            item {
+                SettingsCard(title = "AI models") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Model provider", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = if (openCode) {
+                                    "Guides, rewrites, detours and chat run on your OpenCode Go " +
+                                        "subscription."
+                                } else {
+                                    "The same calls go to Google Gemini directly, billed per token."
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        ModelProviderDropdown(
+                            selected = state.modelProvider,
+                            onSelect = { id -> settings.update { it.copy(modelProvider = id) } },
+                        )
+                    }
+                    StatusLine(
+                        text = apiStatus ?: "Checking\u2026",
+                        isError = apiOk == false,
+                        isSuccess = apiOk == true,
+                    )
+                    if (openCode) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Uses Gemini 4 Argon Contributor. That contributor tier allows " +
+                                "Google to use prompts and completions to improve its models.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             // ---------------------------------------------------------- appearance
             item {
                 SettingsCard(title = "Appearance") {
@@ -205,9 +258,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
                     } else {
                         StatusLine(
-                            text = apiStatus ?: "Checking\u2026",
-                            isError = apiOk == false,
-                            isSuccess = apiOk == true,
+                            text = if (state.hasGeminiKey) {
+                                "Gemini TTS key configured. This is separate from the model provider above."
+                            } else {
+                                "No Gemini key in this build, so the phone's own voice is used."
+                            },
+                            isError = !state.hasGeminiKey,
+                            isSuccess = state.hasGeminiKey,
                         )
                     }
                 }
@@ -271,6 +328,38 @@ private fun ThemeDropdown(selected: String, onSelect: (String) -> Unit) {
                     onClick = {
                         expanded = false
                         onSelect(tag)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A compact text-model provider picker. */
+@Composable
+private fun ModelProviderDropdown(selected: String, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = MODEL_PROVIDERS.firstOrNull { it.first == selected }?.second ?: selected
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "Model provider",
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            MODEL_PROVIDERS.forEach { (id, text) ->
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        expanded = false
+                        onSelect(id)
                     },
                 )
             }

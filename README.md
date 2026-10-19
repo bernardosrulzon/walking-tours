@@ -49,6 +49,8 @@ Install the **debug** build. That's not laziness: the Google keys are bound to t
 
 The whole tour works with **no keys at all**, using the voice already on your phone. If you want the fancier cloud voice and the AI assistant, bring your own Google keys; they're baked in at build time. Treat them like a wallet and never commit them. The full walkthrough lives in [GOOGLE_SETUP.md](GOOGLE_SETUP.md).
 
+The **text models** (guides, rewrites, detours and the Ask chat) have their own provider switch in Settings: **OpenCode Go** (the default when an OpenCode key is present) or Google Gemini direct. Add `opencode.apiKey` to `local.properties` and rebuild. Go is called through its Gemini-compatible endpoint — `https://opencode.ai/inference/go/google/v1beta/...` — with the app's own User-Agent and a stable `x-opencode-session` per conversation, as its docs require. The default Go model is `gemini-4-argon-contributor`; note that Contributor tier allows Google to use prompts to improve its models, and Settings says so. Narration is unaffected: it stays on Gemini TTS or ElevenLabs, since inference has no speech endpoint.
+
 The cloud voice itself has two engines, switchable in Settings: **Gemini 3.8 Flash TTS** (the default) and **ElevenLabs v4**. ElevenLabs is optional; add `elevenlabs.apiKey` to `local.properties` and rebuild. Each guide is cast onto its own ElevenLabs voice when the persona is created, and the rewrite's audio tags (`<laugh>`, `<sigh>`, `<short pause>`) are translated to the square-bracket tags v4 performs. Voices that need a paid plan return a readable error rather than failing silently.
 
 ## Under the hood, in one breath

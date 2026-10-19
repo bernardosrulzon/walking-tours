@@ -71,16 +71,19 @@ internal object AiHttp {
         body: JSONObject,
         headers: Map<String, String> = emptyMap(),
         readTimeoutMs: Int = TIMEOUT_MS,
+        /** Named in error messages, so a failure says which service refused. */
+        serviceName: String = "Google",
     ): JSONObject = withContext(Dispatchers.IO) {
-        request("POST", url, body.toString(), headers, readTimeoutMs)
+        request("POST", url, body.toString(), headers, readTimeoutMs, serviceName)
     }
 
     suspend fun getJson(
         url: String,
         headers: Map<String, String> = emptyMap(),
         readTimeoutMs: Int = TIMEOUT_MS,
+        serviceName: String = "Google",
     ): JSONObject = withContext(Dispatchers.IO) {
-        request("GET", url, null, headers, readTimeoutMs)
+        request("GET", url, null, headers, readTimeoutMs, serviceName)
     }
 
     private fun request(
@@ -89,6 +92,7 @@ internal object AiHttp {
         body: String?,
         headers: Map<String, String>,
         readTimeoutMs: Int,
+        serviceName: String,
     ): JSONObject {
         var connection: HttpURLConnection? = null
         try {
@@ -111,31 +115,33 @@ internal object AiHttp {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
 
-            if (code !in 200..299) throw AiException(friendlyMessage(code, text), code)
+            if (code !in 200..299) throw AiException(friendlyMessage(code, text, serviceName), code)
 
             return if (text.isBlank()) JSONObject() else JSONObject(text)
         } catch (e: AiException) {
             throw e
         } catch (e: IOException) {
-            throw AiException("Could not reach Google. Check your internet connection.", 0, e)
+            throw AiException("Could not reach $serviceName. Check your internet connection.", 0, e)
         } finally {
             connection?.disconnect()
         }
     }
 
     /** Turns an HTTP failure into something a walker standing in a square can act on. */
-    private fun friendlyMessage(code: Int, body: String): String {
+    private fun friendlyMessage(code: Int, body: String, serviceName: String): String {
         val detail = runCatching {
             JSONObject(body).optJSONObject("error")?.optString("message")
         }.getOrNull().orEmpty()
 
         val base = when (code) {
-            400 -> "Google rejected the request."
-            401, 403 -> "Google rejected the credentials. Check the API key, and that the API is " +
-                "enabled for your project with billing turned on."
+            400 -> "$serviceName rejected the request."
+            401, 403 -> "$serviceName rejected the credentials. Check the API key, and that the " +
+                "account can use this model."
+            402 -> "$serviceName needs credits for this request. Top up the account, or switch " +
+                "provider in Settings."
             404 -> "Not found. The model or voice may not be available to your account."
-            429 -> "Quota exceeded. Wait a moment, or review your Google Cloud quotas and billing."
-            in 500..599 -> "Google's service is temporarily unavailable. Try again."
+            429 -> "Quota or rate limit reached. Wait a moment, or review the account's limits."
+            in 500..599 -> "$serviceName is temporarily unavailable. Try again."
             else -> "Request failed with HTTP $code."
         }
         return if (detail.isNullOrBlank()) base else "$base\n\n$detail"

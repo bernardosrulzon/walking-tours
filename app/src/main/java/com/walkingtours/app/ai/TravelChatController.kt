@@ -46,7 +46,7 @@ data class ChatUiState(
  */
 class TravelChatController(
     private val repository: TourRepository,
-    private val geminiClient: GeminiClient,
+    private val modelClient: ModelClient,
     private val settings: AiSettings,
     private val guide: GuideController,
 ) {
@@ -89,7 +89,7 @@ class TravelChatController(
                 },
                 messages = conversations[key].orEmpty().toList(),
                 suggestions = suggestionsFor(stop),
-                needsApiKey = !settings.current.hasGeminiKey,
+                needsApiKey = !settings.current.modelProviderReady,
             )
         }
     }
@@ -99,7 +99,7 @@ class TravelChatController(
         if (trimmed.isEmpty() && image == null) return
         val key = currentKey ?: return
 
-        if (!settings.current.hasGeminiKey) {
+        if (!settings.current.modelProviderReady) {
             append(key, ChatMessage(ChatRole.ASSISTANT, MISSING_KEY_MESSAGE, isError = true))
             return
         }
@@ -112,7 +112,7 @@ class TravelChatController(
 
         scope.launch {
             try {
-                val answer = geminiClient.generate(
+                val answer = modelClient.generate(
                     systemInstruction = buildSystemInstruction(hasImage = image != null),
                     history = history,
                     prompt = trimmed.ifEmpty { "Tell me what you can about this photo." },
@@ -122,6 +122,7 @@ class TravelChatController(
                     // reply a generous budget, and switch off hidden thinking so it cannot eat that
                     // budget and truncate the visible text.
                     maxOutputTokens = 2048,
+                    session = "chat-${key.replace('|', '-')}",
                     thinkingBudget = 0,
                 )
                 append(key, ChatMessage(ChatRole.ASSISTANT, answer))
@@ -146,7 +147,7 @@ class TravelChatController(
     }
 
     fun refreshKeyState() {
-        _state.value = _state.value.copy(needsApiKey = !settings.current.hasGeminiKey)
+        _state.value = _state.value.copy(needsApiKey = !settings.current.modelProviderReady)
     }
 
 

@@ -4,9 +4,20 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 /** Default cloud voice: a Gemini 3.8 prebuilt voice. */
 const val DEFAULT_CLOUD_VOICE = "Kore"
+
+/** The text-model providers: OpenCode Go (default) or Google Gemini direct. */
+const val MODEL_PROVIDER_OPENCODE = "opencode"
+const val MODEL_PROVIDER_GOOGLE = "google"
+
+/** The text-model providers, with the names shown in Settings. */
+val MODEL_PROVIDERS: List<Pair<String, String>> = listOf(
+    MODEL_PROVIDER_OPENCODE to "OpenCode Go",
+    MODEL_PROVIDER_GOOGLE to "Google Gemini",
+)
 
 /** The two cloud speech providers the walker can choose between. */
 const val TTS_ENGINE_GEMINI = "gemini"
@@ -54,11 +65,16 @@ const val THEME_MODE_DARK = "dark"
  */
 data class AiSettingsState(
     val useCloudVoice: Boolean = false,
+    /** Which service writes the guides, rewrites and chat: OpenCode Go (default) or Google. */
+    val modelProvider: String = MODEL_PROVIDER_OPENCODE,
     /** Which cloud speech provider reads the narration: Gemini TTS or ElevenLabs. */
     val ttsEngine: String = TTS_ENGINE_GEMINI,
     val cloudVoiceName: String = DEFAULT_CLOUD_VOICE,
     val geminiApiKey: String = "",
     val elevenLabsApiKey: String = "",
+    val opencodeApiKey: String = "",
+    /** Stable per-install id used as the OpenCode Go routing/caching session prefix. */
+    val installId: String = "",
     /** Read AI answers aloud through the same narration engine as the tour. */
     val narrationRate: Float = 1.0f,
     /**
@@ -76,7 +92,16 @@ data class AiSettingsState(
 
     val hasElevenLabsKey: Boolean get() = elevenLabsApiKey.isNotBlank()
 
-    /** True when the selected cloud provider has the key it needs. */
+    val hasOpenCodeKey: Boolean get() = opencodeApiKey.isNotBlank()
+
+    /** True when the selected text-model provider has the key it needs. */
+    val modelProviderReady: Boolean
+        get() = when (modelProvider) {
+            MODEL_PROVIDER_OPENCODE -> hasOpenCodeKey
+            else -> hasGeminiKey
+        }
+
+    /** True when the selected cloud speaker has the key it needs. */
     val cloudEngineReady: Boolean
         get() = when (ttsEngine) {
             TTS_ENGINE_ELEVENLABS -> hasElevenLabsKey
@@ -106,6 +131,11 @@ class AiSettings(context: Context) {
     private fun load(): AiSettingsState {
         val buildGemini = BuildConfigKeys.geminiApiKey
         val buildEleven = BuildConfigKeys.elevenLabsApiKey
+        val buildOpenCode = BuildConfigKeys.openCodeApiKey
+        // The install id is generated once and kept: OpenCode Go uses the session header for routing
+        // and prompt caching, so it must not change between requests.
+        val installId = prefs.getString(KEY_INSTALL_ID, null)
+            ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_INSTALL_ID, it).apply() }
         return AiSettingsState(
             // Default the cloud voice on when a key was supplied at build time, so a configured
             // build just works; otherwise stay on the free on-device engine.
@@ -113,6 +143,9 @@ class AiSettings(context: Context) {
                 KEY_USE_CLOUD,
                 buildGemini.isNotBlank() || buildEleven.isNotBlank(),
             ),
+            modelProvider = (prefs.getString(KEY_MODEL_PROVIDER, null) ?: defaultModelProvider(buildOpenCode))
+                .takeIf { it in MODEL_PROVIDERS.map { (id, _) -> id } }
+                ?: defaultModelProvider(buildOpenCode),
             ttsEngine = (prefs.getString(KEY_TTS_ENGINE, null) ?: TTS_ENGINE_GEMINI)
                 .takeIf { it in TTS_ENGINES.map { (id, _) -> id } } ?: TTS_ENGINE_GEMINI,
             cloudVoiceName = (prefs.getString(KEY_VOICE, null) ?: DEFAULT_CLOUD_VOICE)
@@ -120,6 +153,8 @@ class AiSettings(context: Context) {
                 .takeIf { it in GEMINI_TTS_VOICES } ?: DEFAULT_CLOUD_VOICE,
             geminiApiKey = prefs.getString(KEY_GEMINI_KEY, null) ?: buildGemini,
             elevenLabsApiKey = prefs.getString(KEY_ELEVENLABS_KEY, null) ?: buildEleven,
+            opencodeApiKey = prefs.getString(KEY_OPENCODE_KEY, null) ?: buildOpenCode,
+            installId = installId,
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
             autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, false),
             narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
@@ -134,10 +169,12 @@ class AiSettings(context: Context) {
         _state.value = next
         prefs.edit()
             .putBoolean(KEY_USE_CLOUD, next.useCloudVoice)
+            .putString(KEY_MODEL_PROVIDER, next.modelProvider)
             .putString(KEY_TTS_ENGINE, next.ttsEngine)
             .putString(KEY_VOICE, next.cloudVoiceName)
             .putString(KEY_GEMINI_KEY, next.geminiApiKey)
             .putString(KEY_ELEVENLABS_KEY, next.elevenLabsApiKey)
+            .putString(KEY_OPENCODE_KEY, next.opencodeApiKey)
             .putFloat(KEY_RATE, next.narrationRate)
             .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
             .putString(KEY_NARRATION_LANGUAGE, next.narrationLanguage)
@@ -147,10 +184,13 @@ class AiSettings(context: Context) {
 
     private companion object {
         const val KEY_USE_CLOUD = "use_cloud_voice"
+        const val KEY_MODEL_PROVIDER = "model_provider"
         const val KEY_TTS_ENGINE = "tts_engine"
         const val KEY_VOICE = "cloud_voice_name"
         const val KEY_GEMINI_KEY = "gemini_api_key"
         const val KEY_ELEVENLABS_KEY = "elevenlabs_api_key"
+        const val KEY_OPENCODE_KEY = "opencode_api_key"
+        const val KEY_INSTALL_ID = "install_id"
         const val KEY_RATE = "narration_rate"
         const val KEY_AUTO_PLAY = "auto_play_chapters"
         const val KEY_NARRATION_LANGUAGE = "narration_language"
@@ -158,8 +198,16 @@ class AiSettings(context: Context) {
     }
 }
 
+/**
+ * OpenCode Go is the default provider when its key is present in the build; otherwise Google Gemini
+ * stays the default, so a build without an OpenCode key still works out of the box.
+ */
+private fun defaultModelProvider(openCodeKey: String): String =
+    if (openCodeKey.isNotBlank()) MODEL_PROVIDER_OPENCODE else MODEL_PROVIDER_GOOGLE
+
 /** Indirection so this file does not depend on the generated BuildConfig directly. */
 object BuildConfigKeys {
     val geminiApiKey: String get() = com.walkingtours.app.BuildConfig.GOOGLE_GEMINI_API_KEY
     val elevenLabsApiKey: String get() = com.walkingtours.app.BuildConfig.ELEVENLABS_API_KEY
+    val openCodeApiKey: String get() = com.walkingtours.app.BuildConfig.OPENCODE_API_KEY
 }

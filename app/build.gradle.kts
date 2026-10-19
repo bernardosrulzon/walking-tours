@@ -16,6 +16,7 @@ fun secretKey(name: String): String =
 val googleApiKey = secretKey("google.api.key")
 val googleGeminiApiKey = secretKey("google.gemini.apiKey").ifBlank { googleApiKey }
 val elevenLabsApiKey = secretKey("elevenlabs.apiKey")
+val openCodeApiKey = secretKey("opencode.apiKey")
 
 /**
  * The Maps SDK reads its key from the manifest, so unlike the Gemini key this one cannot be
@@ -54,6 +55,7 @@ android {
 
         buildConfigField("String", "GOOGLE_GEMINI_API_KEY", "\"$googleGeminiApiKey\"")
         buildConfigField("String", "ELEVENLABS_API_KEY", "\"$elevenLabsApiKey\"")
+        buildConfigField("String", "OPENCODE_API_KEY", "\"$openCodeApiKey\"")
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
     }

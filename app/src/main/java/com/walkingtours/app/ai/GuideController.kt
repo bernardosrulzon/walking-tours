@@ -98,7 +98,7 @@ fun deliveryStyleFor(guide: Guide, tone: String?): String {
 class GuideController(
     context: Context,
     private val repository: TourRepository,
-    private val geminiClient: GeminiClient,
+    private val modelClient: ModelClient,
     private val settings: AiSettings,
     private val personaSettings: PersonaSettings,
 ) {
@@ -171,7 +171,7 @@ class GuideController(
         val language = settings.current.narrationLanguage
         val cacheId = "$tourId|$language"
         guideSuggestions[cacheId]?.let { return it }
-        if (!settings.current.hasGeminiKey) return fallbackGuides(language)
+        if (!settings.current.modelProviderReady) return fallbackGuides(language)
         val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return fallbackGuides(language)
         val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
         val guides = runCatching { requestGuides(tour, stops, language) }
@@ -228,7 +228,7 @@ class GuideController(
                 return SpokenLine(it.text, it.style, guide)
             }
         val authoredStyle = deliveryStyleFor(guide, persona.tone(tourId))
-        if (!settings.current.hasGeminiKey) {
+        if (!settings.current.modelProviderReady) {
             return SpokenLine(request.authored, authoredStyle, guide)
         }
 
@@ -274,7 +274,7 @@ class GuideController(
         } else {
             "English"
         }
-        val text = geminiClient.generate(
+        val text = modelClient.generate(
             systemInstruction = GUIDE_SYSTEM,
             history = emptyList(),
             prompt = buildString {
@@ -295,6 +295,7 @@ class GuideController(
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,
+            session = "guides-${tour.id}",
         )
 
         val json = JSONArray(extractJsonArray(text))
@@ -310,7 +311,7 @@ class GuideController(
     private suspend fun rewrite(tourId: String, guide: Guide, request: NarrationRequest): SpokenLine {
         val persona = personaSettings.current
         val tour = repository.getTour(tourId)
-        val raw = geminiClient.generate(
+        val raw = modelClient.generate(
             systemInstruction = narrationSystem(
                 tour,
                 guide,
@@ -327,6 +328,7 @@ class GuideController(
             },
             maxOutputTokens = 3000,
             thinkingBudget = 0,
+            session = "tour-$tourId",
         )
         val line = parseSpokenLine(raw, guide)
             ?: throw IllegalStateException("The rewrite came back unusable")
@@ -505,7 +507,7 @@ class GuideController(
         val language = settings.current.narrationLanguage
         val cacheId = "$tourId|detours|$language"
         detourTopics[cacheId]?.let { return it }
-        if (!settings.current.hasGeminiKey) return emptyList()
+        if (!settings.current.modelProviderReady) return emptyList()
         val tour = runCatching { repository.getTour(tourId) }.getOrNull() ?: return emptyList()
         val stops = runCatching { repository.getStops(tourId) }.getOrDefault(emptyList())
         val topics = runCatching { requestDetourTopics(tour, stops, language) }
@@ -532,7 +534,7 @@ class GuideController(
                 Log.i(TAG, "Cache hit for detour ${topic.id} (${it.text.length} chars)")
                 return SpokenLine(it.text, it.style, guide ?: NEUTRAL_DETOUR_GUIDE)
             }
-        if (!settings.current.hasGeminiKey) return null
+        if (!settings.current.modelProviderReady) return null
 
         val jobKey = "$signature|$key"
         val deferred = detourJobs.getOrPut(jobKey) {
@@ -600,7 +602,7 @@ class GuideController(
         } else {
             "English"
         }
-        val text = geminiClient.generate(
+        val text = modelClient.generate(
             systemInstruction = DETOUR_SYSTEM,
             history = emptyList(),
             prompt = buildString {
@@ -628,6 +630,7 @@ class GuideController(
             },
             maxOutputTokens = 1500,
             thinkingBudget = 0,
+            session = "detours-${tour.id}",
         )
 
         val json = JSONArray(extractJsonArray(text))
@@ -645,7 +648,7 @@ class GuideController(
     ): SpokenLine {
         val persona = personaSettings.current
         val tour = repository.getTour(tourId)
-        val raw = geminiClient.generate(
+        val raw = modelClient.generate(
             systemInstruction = detourSystem(
                 tour,
                 guide,
@@ -660,6 +663,7 @@ class GuideController(
             },
             maxOutputTokens = 4000,
             thinkingBudget = 0,
+            session = "tour-$tourId",
         )
         val voice = guide ?: NEUTRAL_DETOUR_GUIDE
         val line = parseSpokenLine(raw, voice)

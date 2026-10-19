@@ -23,23 +23,25 @@ data class ChatMessage(
 const val TEXT_MODEL = "gemini-3.8-flash"
 
 /**
- * The model used through OpenCode Go.
+ * The model used through OpenCode.
  *
- * Go serves Gemini models on a Gemini-compatible path, so the app keeps one request and response
- * shape and only the transport changes. Argon is the Gemini-family model Go offers; it is included
- * in the Go subscription rather than billed per token, which is why it is the default here.
+ * Same model as the Google transport, on OpenCode's Gemini-compatible path: the app keeps one
+ * request and response shape and only the transport changes. Note that the **Go** subscription does
+ * not serve Gemini 3.8 Flash (its only Gemini model is Gemini 4 Argon, which this app does not use);
+ * this is OpenCode's pay-as-you-go Console family, and needs Console credits.
  */
-const val OPENCODE_MODEL = "gemini-4-argon-contributor"
+const val OPENCODE_MODEL = "gemini-3.8-flash"
 
-/** Identifies this app to OpenCode Go — a product name, not a generic SDK or HTTP library. */
+/** Identifies this app to OpenCode — a product name, not a generic SDK or HTTP library. */
 const val MODEL_USER_AGENT = "walking-tours/1.0"
 
 /**
  * The text-model client: guides, rewrites, detours and chat.
  *
- * It talks to one of two providers, chosen in Settings and defaulting to OpenCode Go:
+ * It talks to one of two providers, chosen in Settings and defaulting to Google Gemini, since
+ * both run Gemini 3.8 Flash and Google works without extra credits:
  *
- *  - **OpenCode Go** (`https://opencode.ai/inference/go/...`) with a service-account key. Go asks
+ *  - **OpenCode** (`https://opencode.ai/inference/...`) with a service-account key. The gateway asks
  *    clients to identify themselves with their own User-Agent and to send a stable
  *    `x-opencode-session` per conversation, which is what [generate]'s `session` argument is for.
  *  - **Google Gemini** directly, with the Google key and the app-identity headers.
@@ -233,8 +235,8 @@ class ModelClient(
     }
 
     /**
-     * Headers OpenCode Go asks for: a bearer token, this client's own User-Agent, and a stable
-     * session id so related requests share routing and prompt cache.
+     * Headers the OpenCode gateway asks for: a bearer token, this client's own User-Agent, and a
+     * stable session id so related requests share routing and prompt cache.
      */
     private fun openCodeHeaders(
         state: AiSettingsState,
@@ -263,15 +265,15 @@ class ModelClient(
 
     private fun requireOpenCodeKey(state: AiSettingsState): String {
         if (state.opencodeApiKey.isBlank()) {
-            throw AiException("No OpenCode Go API key is configured.")
+            throw AiException("No OpenCode API key is configured.")
         }
         return state.opencodeApiKey
     }
 
     private companion object {
         const val GOOGLE_BASE = "https://generativelanguage.googleapis.com/v1beta"
-        const val OPENCODE_BASE = "https://opencode.ai/inference/go/google/v1beta"
-        const val OPENCODE_MODELS_URL = "https://opencode.ai/inference/go/v1/models"
+        const val OPENCODE_BASE = "https://opencode.ai/inference/google/v1beta"
+        const val OPENCODE_MODELS_URL = "https://opencode.ai/inference/v1/models"
         const val MAX_HISTORY_TURNS = 8
 
         /**

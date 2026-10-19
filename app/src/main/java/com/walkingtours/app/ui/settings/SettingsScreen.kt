@@ -72,13 +72,13 @@ fun SettingsScreen(onBack: () -> Unit) {
     var apiStatus by remember { mutableStateOf<String?>(null) }
     var apiOk by remember { mutableStateOf<Boolean?>(null) }
     val openCode = state.modelProvider == MODEL_PROVIDER_OPENCODE
-    val providerName = if (openCode) "OpenCode Go" else "Gemini"
+    val providerName = if (openCode) "OpenCode" else "Gemini"
 
     fun checkApi() {
         if (!state.modelProviderReady) {
             apiOk = false
             apiStatus = if (openCode) {
-                "No OpenCode Go key in this build"
+                "No OpenCode key in this build"
             } else {
                 "No Gemini API key in this build"
             }
@@ -98,7 +98,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                     apiStatus = "$wanted is not available on this key"
                 } else {
                     apiOk = true
-                    apiStatus = "$providerName working \u00b7 $wanted"
+                    apiStatus = if (openCode) {
+                        "OpenCode key accepted \u00b7 $wanted"
+                    } else {
+                        "Gemini API working \u00b7 $wanted"
+                    }
                 }
             } catch (e: Exception) {
                 apiOk = false
@@ -137,10 +141,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                             Text("Model provider", style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 text = if (openCode) {
-                                    "Guides, rewrites, detours and chat run on your OpenCode Go " +
-                                        "subscription."
+                                    "Guides, rewrites, detours and chat run through OpenCode, " +
+                                        "using Gemini 3.8 Flash."
                                 } else {
-                                    "The same calls go to Google Gemini directly, billed per token."
+                                    "Guides, rewrites, detours and chat run on Google Gemini, " +
+                                        "billed per token."
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -160,8 +165,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (openCode) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Uses Gemini 4 Argon Contributor. That contributor tier allows " +
-                                "Google to use prompts and completions to improve its models.",
+                            text = "OpenCode serves Gemini 3.8 Flash through its pay-as-you-go " +
+                                "gateway. The Go subscription alone does not include it, so this " +
+                                "needs Console credits.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

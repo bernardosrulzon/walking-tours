@@ -9,14 +9,14 @@ import java.util.UUID
 /** Default cloud voice: a Gemini 3.8 prebuilt voice. */
 const val DEFAULT_CLOUD_VOICE = "Kore"
 
-/** The text-model providers: OpenCode Go (default) or Google Gemini direct. */
+/** The text-model providers: Google Gemini (default) or OpenCode. */
 const val MODEL_PROVIDER_OPENCODE = "opencode"
 const val MODEL_PROVIDER_GOOGLE = "google"
 
 /** The text-model providers, with the names shown in Settings. */
 val MODEL_PROVIDERS: List<Pair<String, String>> = listOf(
-    MODEL_PROVIDER_OPENCODE to "OpenCode Go",
     MODEL_PROVIDER_GOOGLE to "Google Gemini",
+    MODEL_PROVIDER_OPENCODE to "OpenCode",
 )
 
 /** The two cloud speech providers the walker can choose between. */
@@ -65,15 +65,15 @@ const val THEME_MODE_DARK = "dark"
  */
 data class AiSettingsState(
     val useCloudVoice: Boolean = false,
-    /** Which service writes the guides, rewrites and chat: OpenCode Go (default) or Google. */
-    val modelProvider: String = MODEL_PROVIDER_OPENCODE,
+    /** Which service writes the guides, rewrites and chat: Google (default) or OpenCode. */
+    val modelProvider: String = MODEL_PROVIDER_GOOGLE,
     /** Which cloud speech provider reads the narration: Gemini TTS or ElevenLabs. */
     val ttsEngine: String = TTS_ENGINE_GEMINI,
     val cloudVoiceName: String = DEFAULT_CLOUD_VOICE,
     val geminiApiKey: String = "",
     val elevenLabsApiKey: String = "",
     val opencodeApiKey: String = "",
-    /** Stable per-install id used as the OpenCode Go routing/caching session prefix. */
+    /** Stable per-install id used as the OpenCode routing/caching session prefix. */
     val installId: String = "",
     /** Read AI answers aloud through the same narration engine as the tour. */
     val narrationRate: Float = 1.0f,
@@ -132,7 +132,7 @@ class AiSettings(context: Context) {
         val buildGemini = BuildConfigKeys.geminiApiKey
         val buildEleven = BuildConfigKeys.elevenLabsApiKey
         val buildOpenCode = BuildConfigKeys.openCodeApiKey
-        // The install id is generated once and kept: OpenCode Go uses the session header for routing
+        // The install id is generated once and kept: OpenCode uses the session header for routing
         // and prompt caching, so it must not change between requests.
         val installId = prefs.getString(KEY_INSTALL_ID, null)
             ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_INSTALL_ID, it).apply() }
@@ -143,9 +143,12 @@ class AiSettings(context: Context) {
                 KEY_USE_CLOUD,
                 buildGemini.isNotBlank() || buildEleven.isNotBlank(),
             ),
-            modelProvider = (prefs.getString(KEY_MODEL_PROVIDER, null) ?: defaultModelProvider(buildOpenCode))
+            // Gemini 3.8 Flash is the default on both providers. Google direct is the default
+            // provider because it already works with the Google key; OpenCode needs Console credits
+            // and is an explicit choice.
+            modelProvider = (prefs.getString(KEY_MODEL_PROVIDER, null) ?: MODEL_PROVIDER_GOOGLE)
                 .takeIf { it in MODEL_PROVIDERS.map { (id, _) -> id } }
-                ?: defaultModelProvider(buildOpenCode),
+                ?: MODEL_PROVIDER_GOOGLE,
             ttsEngine = (prefs.getString(KEY_TTS_ENGINE, null) ?: TTS_ENGINE_GEMINI)
                 .takeIf { it in TTS_ENGINES.map { (id, _) -> id } } ?: TTS_ENGINE_GEMINI,
             cloudVoiceName = (prefs.getString(KEY_VOICE, null) ?: DEFAULT_CLOUD_VOICE)
@@ -197,13 +200,6 @@ class AiSettings(context: Context) {
         const val KEY_THEME_MODE = "theme_mode"
     }
 }
-
-/**
- * OpenCode Go is the default provider when its key is present in the build; otherwise Google Gemini
- * stays the default, so a build without an OpenCode key still works out of the box.
- */
-private fun defaultModelProvider(openCodeKey: String): String =
-    if (openCodeKey.isNotBlank()) MODEL_PROVIDER_OPENCODE else MODEL_PROVIDER_GOOGLE
 
 /** Indirection so this file does not depend on the generated BuildConfig directly. */
 object BuildConfigKeys {

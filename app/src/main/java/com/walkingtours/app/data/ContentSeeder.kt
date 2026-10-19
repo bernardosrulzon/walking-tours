@@ -197,7 +197,7 @@ class ContentSeeder(
          *     Grand Vizier, Neoria, Diretas Já) consolidated into tour intros; stops keep
          *     stop-specific angles with short refer-backs.
          */
-        const val CONTENT_VERSION = "17"
+        const val CONTENT_VERSION = "18"
         const val KEY_VERSION = "content_version"
 
         /** File names already seeded, so they are not read and parsed again on later launches. */

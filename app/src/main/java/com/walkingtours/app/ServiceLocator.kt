@@ -4,6 +4,7 @@ import android.content.Context
 import com.walkingtours.app.ai.AiSettings
 import com.walkingtours.app.ai.GeminiClient
 import com.walkingtours.app.ai.GuideController
+import com.walkingtours.app.ai.ElevenLabsClient
 import com.walkingtours.app.ai.GeminiTtsClient
 import com.walkingtours.app.ai.PersonaSettings
 import com.walkingtours.app.ai.TravelChatController
@@ -35,7 +36,7 @@ object ServiceLocator {
         appContext = context.applicationContext
 
         // Keep the narration engine in step with the user's voice choice, so switching between the
-        // free on-device voice and the Google Cloud voice takes effect immediately.
+        // phone's voice, Gemini and ElevenLabs takes effect immediately.
         scope.launch {
             aiSettings.state.collect { narrationEngine.refreshFromSettings() }
         }
@@ -59,6 +60,10 @@ object ServiceLocator {
         GeminiTtsClient(appContext) { aiSettings.current.geminiApiKey }
     }
 
+    val elevenLabsClient: ElevenLabsClient by lazy {
+        ElevenLabsClient { aiSettings.current.elevenLabsApiKey }
+    }
+
     val geminiClient: GeminiClient by lazy {
         GeminiClient(appContext) { aiSettings.current.geminiApiKey }
     }
@@ -76,7 +81,7 @@ object ServiceLocator {
      * settings select, so screens and the tour session never have to re-subscribe mid-walk.
      */
     val narrationEngine: NarrationRouter by lazy {
-        NarrationRouter(appContext, aiSettings, geminiTtsClient)
+        NarrationRouter(appContext, aiSettings, geminiTtsClient, elevenLabsClient)
     }
 
     val locationTracker: LocationTracker by lazy { LocationTracker(appContext) }

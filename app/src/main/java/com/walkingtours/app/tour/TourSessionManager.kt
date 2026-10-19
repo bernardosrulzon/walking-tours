@@ -294,7 +294,7 @@ class TourSessionManager(
                 tourId,
                 NarrationRequest(OVERVIEW_ID, "the introduction to the walk", overview, isIntroduction = true),
             )
-            narration.play(OVERVIEW_ID, line.text, style = line.style)
+            narration.play(OVERVIEW_ID, line.text, style = line.style, guide = line.guide)
         }
     }
 
@@ -616,7 +616,7 @@ class TourSessionManager(
                 tourId,
                 NarrationRequest(stop.id, "Stop ${stop.order}: ${stop.name} (${stop.category})", stop.narration),
             )
-            narration.play(stop.id, line.text, style = line.style)
+            narration.play(stop.id, line.text, style = line.style, guide = line.guide)
         }
     }
 
@@ -699,7 +699,7 @@ class TourSessionManager(
                 _detourError.value = "Couldn't load this detour. Check your connection and try again."
                 return@launch
             }
-            narration.play(detourUtteranceId(topic.id), line.text, style = line.style)
+            narration.play(detourUtteranceId(topic.id), line.text, style = line.style, guide = line.guide)
         }
     }
 

@@ -22,6 +22,8 @@ data class Guide(
     val style: String,
     val gender: String = "",
     val angle: String = "",
+    /** The ElevenLabs voice cast for this guide, chosen once when the persona is created. */
+    val elevenVoice: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -30,6 +32,7 @@ data class Guide(
         .put("style", style)
         .put("gender", gender)
         .put("angle", angle)
+        .put("elevenVoice", elevenVoice)
 
     companion object {
         fun fromJson(json: JSONObject): Guide? {
@@ -43,6 +46,7 @@ data class Guide(
                 gender = json.optString("gender").trim().lowercase()
                     .takeIf { it == "feminine" || it == "masculine" }.orEmpty(),
                 angle = json.optString("angle").trim(),
+                elevenVoice = json.optString("elevenVoice").trim(),
             )
         }
 
@@ -120,6 +124,6 @@ val FALLBACK_GUIDES_PT: List<Guide> = listOf(
     ),
 )
 
-/** The built-in guides in the chosen narration language. */
+/** The built-in guides in the chosen narration language, cast onto ElevenLabs voices. */
 fun fallbackGuides(language: String): List<Guide> =
-    if (language == NARRATION_LANGUAGE_PT_BR) FALLBACK_GUIDES_PT else FALLBACK_GUIDES
+    castElevenVoices(if (language == NARRATION_LANGUAGE_PT_BR) FALLBACK_GUIDES_PT else FALLBACK_GUIDES)

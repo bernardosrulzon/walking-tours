@@ -20,7 +20,7 @@ There's a second tour inside **Topkapı Palace** — the courtyards, the kitchen
 
 ## You choose your guide
 
-Before the first step, the app asks one question — *what kind of explorer are you?* — then hands you four guides, each with their own voice, humour and opinions. They walk the whole route with you.
+Before the first step, the app hands you four guides for this walk, each dwelling on a different side of the place — its history, its architecture, its food and daily life, its legends — so picking a guide is picking what you want more of. They walk the whole route with you.
 
 Not feeling the jokes? Tap **Tune** on any stop and tell them what to change — *more direct*, *fewer asides*, *be a pirate*. They take notes. Change your mind later and you can switch guides entirely.
 
@@ -48,6 +48,8 @@ Install the **debug** build. That's not laziness: the Google keys are bound to t
 ## Keys are optional — and yours
 
 The whole tour works with **no keys at all**, using the voice already on your phone. If you want the fancier cloud voice and the AI assistant, bring your own Google keys; they're baked in at build time. Treat them like a wallet and never commit them. The full walkthrough lives in [GOOGLE_SETUP.md](GOOGLE_SETUP.md).
+
+The cloud voice itself has two engines, switchable in Settings: **Gemini 3.8 Flash TTS** (the default) and **ElevenLabs v4**. ElevenLabs is optional; add `elevenlabs.apiKey` to `local.properties` and rebuild. Each guide is cast onto its own ElevenLabs voice when the persona is created, and the rewrite's audio tags (`<laugh>`, `<sigh>`, `<short pause>`) are translated to the square-bracket tags v4 performs. Voices that need a paid plan return a readable error rather than failing silently.
 
 ## Under the hood, in one breath
 

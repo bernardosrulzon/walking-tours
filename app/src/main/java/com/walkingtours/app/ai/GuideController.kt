@@ -21,8 +21,8 @@ import org.json.JSONObject
 /** A personalised narration, tagged with the signature it was generated under. */
 data class GuideNarration(val signature: String, val text: String, val style: String?)
 
-/** What is handed to the narration engine: the words, and the delivery to perform them with. */
-data class SpokenLine(val text: String, val style: String?)
+/** What is handed to the narration engine: the words, the delivery, and who is speaking them. */
+data class SpokenLine(val text: String, val style: String?, val guide: Guide? = null)
 
 /**
  * What one rewrite is about.
@@ -205,15 +205,15 @@ class GuideController(
             guide,
             persona.tone(tourId),
             settings.current.narrationLanguage,
-        ) ?: return SpokenLine(request.authored, null)
+        ) ?: return SpokenLine(request.authored, null, guide)
         val key = cacheKey(tourId, request.key)
         _narrations.value[key]
             ?.takeIf { it.signature == signature }
             ?.let {
                 Log.i(TAG, "Cache hit for ${request.key} (${it.text.length} chars)")
-                return SpokenLine(it.text, it.style)
+                return SpokenLine(it.text, it.style, guide)
             }
-        if (!settings.current.hasGeminiKey) return SpokenLine(request.authored, null)
+        if (!settings.current.hasGeminiKey) return SpokenLine(request.authored, null, guide)
 
         val jobKey = "$signature|$key"
         val deferred = jobs.getOrPut(jobKey) {
@@ -236,7 +236,7 @@ class GuideController(
                     persist()
                     Log.i(TAG, "Rewrote ${request.key}: ${line.text.length} chars")
                 }
-                line ?: SpokenLine(request.authored, guide.style)
+                line ?: SpokenLine(request.authored, guide.style, guide)
             }
         }
         return deferred.await()
@@ -281,11 +281,13 @@ class GuideController(
         )
 
         val json = JSONArray(extractJsonArray(text))
-        return buildList {
+        val guides = buildList {
             for (i in 0 until json.length()) {
                 json.optJSONObject(i)?.let { obj -> Guide.fromJson(obj)?.let { add(it) } }
             }
         }
+        // Cast now, not at playback: four guides of the same gender must not share one voice.
+        return castElevenVoices(guides)
     }
 
     private suspend fun rewrite(tourId: String, guide: Guide, request: NarrationRequest): SpokenLine {
@@ -429,14 +431,14 @@ class GuideController(
             val text = obj?.optString("text")?.trim().orEmpty()
             if (text.isNotBlank()) {
                 val style = obj!!.optString("style").trim().ifBlank { guide.style }
-                return SpokenLine(text, style)
+                return SpokenLine(text, style, guide)
             }
             // Malformed JSON: salvage the text field if it is recoverable, else give up.
             val salvaged = salvageTextField(jsonText) ?: return null
-            return SpokenLine(salvaged, guide.style)
+            return SpokenLine(salvaged, guide.style, guide)
         }
         val prose = trimmed.removeSurrounding("\"").trim()
-        return if (prose.isNotBlank()) SpokenLine(prose, guide.style) else null
+        return if (prose.isNotBlank()) SpokenLine(prose, guide.style, guide) else null
     }
 
     /** Reads the value of `"text"` out of a JSON string that may have been cut off mid-way. */
@@ -513,7 +515,7 @@ class GuideController(
             ?.takeIf { it.signature == signature }
             ?.let {
                 Log.i(TAG, "Cache hit for detour ${topic.id} (${it.text.length} chars)")
-                return SpokenLine(it.text, it.style)
+                return SpokenLine(it.text, it.style, guide ?: NEUTRAL_DETOUR_GUIDE)
             }
         if (!settings.current.hasGeminiKey) return null
 

@@ -1,5 +1,7 @@
 package com.walkingtours.app.audio
 
+import com.walkingtours.app.ai.Guide
+
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -170,7 +172,7 @@ class AndroidTtsNarrationEngine(
         })
     }
 
-    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
+    override fun play(stopId: String, text: String, startOffset: Int, style: String?, guide: Guide?) {
         val engine = tts
         if (engine == null || !ready.get()) {
             // Cold start race: a geofence can fire seconds after launch, before the speech engine

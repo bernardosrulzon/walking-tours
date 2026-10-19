@@ -3,7 +3,10 @@ package com.walkingtours.app.audio
 import android.content.Context
 import android.util.Log
 import com.walkingtours.app.ai.AiSettings
+import com.walkingtours.app.ai.ElevenLabsClient
 import com.walkingtours.app.ai.GeminiTtsClient
+import com.walkingtours.app.ai.Guide
+import com.walkingtours.app.ai.TTS_ENGINE_ELEVENLABS
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,16 +24,20 @@ import kotlinx.coroutines.launch
  * every screen re-subscribing to a new progress flow mid-tour, so the router owns one flow and
  * re-points it when the choice changes.
  *
- * It also makes the cloud voice safe to use on a walk. Google Cloud is faster and far better
- * sounding, but it needs a network, a valid key and a non-zero quota. If any of those fail — a dead
- * spot, an expired key, an exhausted quota — the router silently finishes the rest of the tour on
- * the phone's own voice rather than leaving the walker standing in silence. That fallback is
- * deliberate: a guide that stops talking is worse than a guide with a plainer accent.
+ * There are two choices underneath the cloud branch: Gemini 3.8 Flash TTS and ElevenLabs v4. Both
+ * are a [CloudVoice]; the player, cache and progress flow do not know which one produced the audio.
+ *
+ * It also makes a cloud voice safe to use on a walk. Cloud TTS needs a network, a valid key and
+ * a non-zero quota. If any of those fail — a dead spot, an expired key, an exhausted quota — the
+ * router silently finishes the rest of the tour on the phone's own voice rather than leaving the
+ * walker standing in silence. That fallback is deliberate: a guide that stops talking is worse than
+ * a guide with a plainer accent.
  */
 class NarrationRouter(
     private val context: Context,
     private val settings: AiSettings,
-    private val cloudClient: GeminiTtsClient,
+    private val geminiClient: GeminiTtsClient,
+    private val elevenLabsClient: ElevenLabsClient,
 ) : NarrationEngine {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -39,7 +46,7 @@ class NarrationRouter(
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
     private val deviceEngine = AndroidTtsNarrationEngine(context, settings)
-    private var cloudEngine: GeminiTtsNarrationEngine? = null
+    private var cloudEngine: CloudTtsNarrationEngine? = null
 
     private var progressJob: Job? = null
 
@@ -51,7 +58,13 @@ class NarrationRouter(
 
     private var lastRequest: Request? = null
 
-    private data class Request(val stopId: String, val text: String, val startOffset: Int, val style: String?)
+    private data class Request(
+        val stopId: String,
+        val text: String,
+        val startOffset: Int,
+        val style: String?,
+        val guide: Guide?,
+    )
 
     private val cloudConfigured: Boolean get() = settings.current.cloudVoiceReady
 
@@ -81,13 +94,14 @@ class NarrationRouter(
 
     /**
      * Re-point at the engine the settings now ask for. Cheap and idempotent: does nothing unless the
-     * choice actually changed. The API key is part of the identity, so pasting a corrected key
-     * clears an earlier fallback and tries the cloud voice again.
+     * choice actually changed. The provider and the API key are part of the identity, so switching
+     * from Gemini to ElevenLabs (or pasting a corrected key) rebuilds exactly once.
      */
     fun refreshFromSettings() {
         val state = settings.current
         val desiredKey = if (state.cloudVoiceReady) {
-            "cloud:${state.cloudVoiceName}:${state.geminiApiKey.hashCode()}:${state.narrationLanguage}"
+            "cloud:${state.ttsEngine}:${state.cloudVoiceName}:${state.geminiApiKey.hashCode()}:" +
+                "${state.elevenLabsApiKey.hashCode()}:${state.narrationLanguage}"
         } else {
             "device:${state.narrationLanguage}"
         }
@@ -99,13 +113,18 @@ class NarrationRouter(
 
         cloudEngine?.release()
         cloudEngine = if (state.cloudVoiceReady) {
-            GeminiTtsNarrationEngine(context, settings, cloudClient)
+            val voice = if (state.ttsEngine == TTS_ENGINE_ELEVENLABS) {
+                ElevenLabsCloudVoice(settings, elevenLabsClient)
+            } else {
+                GeminiCloudVoice(settings, geminiClient)
+            }
+            CloudTtsNarrationEngine(context, settings, voice)
         } else {
             null
         }
 
         // The phone's voice bakes its locale when it is configured, so a language change has to
-        // reach it directly; the cloud engine reads the language per request.
+        // reach it directly; the cloud engines read the language per request.
         deviceEngine.refreshLanguage()
 
         _progress.value = NarrationProgress()
@@ -120,7 +139,7 @@ class NarrationRouter(
                 _progress.value = update
                 // Cloud failed for this utterance: cover for it with the on-device voice.
                 if (update.state == NarrationState.UNAVAILABLE &&
-                    engine is GeminiTtsNarrationEngine &&
+                    engine is CloudTtsNarrationEngine &&
                     !usingDeviceFallback
                 ) {
                     // Launch separately: bind() cancels the job this collector runs in.
@@ -141,14 +160,20 @@ class NarrationRouter(
             message = "Cloud voice unavailable \u2014 using the phone's voice.",
         )
         bind()
-        active.play(request.stopId, request.text, request.startOffset, request.style)
+        active.play(request.stopId, request.text, request.startOffset, request.style, request.guide)
     }
 
     override fun prepare(onReady: (Boolean) -> Unit) = active.prepare(onReady)
 
-    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
-        lastRequest = Request(stopId, text, startOffset, style)
-        active.play(stopId, text, startOffset, style)
+    override fun play(
+        stopId: String,
+        text: String,
+        startOffset: Int,
+        style: String?,
+        guide: Guide?,
+    ) {
+        lastRequest = Request(stopId, text, startOffset, style, guide)
+        active.play(stopId, text, startOffset, style, guide)
     }
 
     override fun pause() = active.pause()

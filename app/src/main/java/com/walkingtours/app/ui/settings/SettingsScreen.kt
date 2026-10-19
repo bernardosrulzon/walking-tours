@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
 import com.walkingtours.app.ai.TEXT_MODEL
 import com.walkingtours.app.ai.THEME_MODES
+import com.walkingtours.app.ai.TTS_ENGINES
+import com.walkingtours.app.ai.TTS_ENGINE_ELEVENLABS
 import kotlinx.coroutines.launch
 
 /**
@@ -142,12 +144,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Use Gemini voice", style = MaterialTheme.typography.bodyLarge)
+                            Text("Use a cloud voice", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = if (state.hasGeminiKey) {
-                                    "Expressive, acted narration. Billed per request after a free allowance."
-                                } else {
-                                    "No Gemini key in this build, so the phone's own voice is used."
+                                text = when {
+                                    state.ttsEngine == TTS_ENGINE_ELEVENLABS && !state.hasElevenLabsKey ->
+                                        "No ElevenLabs key in this build, so the phone's own voice is used."
+                                    state.ttsEngine != TTS_ENGINE_ELEVENLABS && !state.hasGeminiKey ->
+                                        "No Gemini key in this build, so the phone's own voice is used."
+                                    state.ttsEngine == TTS_ENGINE_ELEVENLABS ->
+                                        "ElevenLabs reads the guide in a voice cast for that character. " +
+                                            "Billed per character."
+                                    else ->
+                                        "Gemini reads the guide. Billed per request after a free allowance."
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -156,15 +164,52 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Spacer(Modifier.width(16.dp))
                         Switch(
                             checked = state.useCloudVoice,
-                            enabled = state.hasGeminiKey,
+                            enabled = state.cloudEngineReady,
                             onCheckedChange = { on -> settings.update { it.copy(useCloudVoice = on) } },
                         )
                     }
-                    StatusLine(
-                        text = apiStatus ?: "Checking\u2026",
-                        isError = apiOk == false,
-                        isSuccess = apiOk == true,
-                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Voice engine",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
+                        VoiceEngineDropdown(
+                            selected = state.ttsEngine,
+                            onSelect = { id ->
+                                val ready = if (id == TTS_ENGINE_ELEVENLABS) {
+                                    state.hasElevenLabsKey
+                                } else {
+                                    state.hasGeminiKey
+                                }
+                                settings.update {
+                                    it.copy(ttsEngine = id, useCloudVoice = it.useCloudVoice && ready)
+                                }
+                            },
+                        )
+                    }
+                    if (state.ttsEngine == TTS_ENGINE_ELEVENLABS) {
+                        StatusLine(
+                            text = if (state.hasElevenLabsKey) {
+                                "ElevenLabs key configured. Each guide speaks in its own cast voice; " +
+                                    "audio tags like [laughs] and [sighs] are performed."
+                            } else {
+                                "No ElevenLabs key in this build. Add elevenlabs.apiKey to local.properties."
+                            },
+                            isError = !state.hasElevenLabsKey,
+                            isSuccess = state.hasElevenLabsKey,
+                        )
+                    } else {
+                        StatusLine(
+                            text = apiStatus ?: "Checking\u2026",
+                            isError = apiOk == false,
+                            isSuccess = apiOk == true,
+                        )
+                    }
                 }
             }
 
@@ -226,6 +271,38 @@ private fun ThemeDropdown(selected: String, onSelect: (String) -> Unit) {
                     onClick = {
                         expanded = false
                         onSelect(tag)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A compact cloud-voice picker: the current engine on a button, the rest in a menu. */
+@Composable
+private fun VoiceEngineDropdown(selected: String, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = TTS_ENGINES.firstOrNull { it.first == selected }?.second ?: selected
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "Voice engine",
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            TTS_ENGINES.forEach { (id, text) ->
+                DropdownMenuItem(
+                    text = { Text(text) },
+                    onClick = {
+                        expanded = false
+                        onSelect(id)
                     },
                 )
             }

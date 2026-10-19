@@ -1,5 +1,6 @@
 package com.walkingtours.app.audio
 
+import com.walkingtours.app.ai.Guide
 import kotlinx.coroutines.flow.StateFlow
 
 /** Where the narrator currently is. */
@@ -44,7 +45,7 @@ data class NarrationProgress(
  * Everything above this interface — the geofence triggers, the transcript highlighting, the tour
  * session — is written against [NarrationEngine] only. That is deliberate: swapping the free
  * on-device text-to-speech engine for a paid, studio-quality cloud voice later means adding one
- * implementation and changing one line in [NarrationEngines], with no changes anywhere else.
+ * implementation and choosing it in Settings, with no changes anywhere else.
  */
 interface NarrationEngine {
 
@@ -64,8 +65,16 @@ interface NarrationEngine {
      * [startOffset] supports resuming a paused narration part-way through.
      * [style] is a sustained delivery direction for voices that take one (e.g. the guide's persona);
      * engines that cannot use it ignore it.
+     * [guide] is who is speaking: cloud voices that cast characters use it to pick the voice, and
+     * engines that have only one voice ignore it.
      */
-    fun play(stopId: String, text: String, startOffset: Int = 0, style: String? = null)
+    fun play(
+        stopId: String,
+        text: String,
+        startOffset: Int = 0,
+        style: String? = null,
+        guide: Guide? = null,
+    )
 
     fun pause()
 

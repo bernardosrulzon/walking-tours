@@ -8,6 +8,16 @@ import kotlinx.coroutines.flow.asStateFlow
 /** Default cloud voice: a Gemini 3.8 prebuilt voice. */
 const val DEFAULT_CLOUD_VOICE = "Kore"
 
+/** The two cloud speech providers the walker can choose between. */
+const val TTS_ENGINE_GEMINI = "gemini"
+const val TTS_ENGINE_ELEVENLABS = "elevenlabs"
+
+/** The cloud voice engines, with the names shown in Settings. */
+val TTS_ENGINES: List<Pair<String, String>> = listOf(
+    TTS_ENGINE_GEMINI to "Gemini 3.8 Flash",
+    TTS_ENGINE_ELEVENLABS to "ElevenLabs v4",
+)
+
 /** Default narration language. */
 const val NARRATION_LANGUAGE = "en-US"
 
@@ -44,8 +54,11 @@ const val THEME_MODE_DARK = "dark"
  */
 data class AiSettingsState(
     val useCloudVoice: Boolean = false,
+    /** Which cloud speech provider reads the narration: Gemini TTS or ElevenLabs. */
+    val ttsEngine: String = TTS_ENGINE_GEMINI,
     val cloudVoiceName: String = DEFAULT_CLOUD_VOICE,
     val geminiApiKey: String = "",
+    val elevenLabsApiKey: String = "",
     /** Read AI answers aloud through the same narration engine as the tour. */
     val narrationRate: Float = 1.0f,
     /**
@@ -61,8 +74,17 @@ data class AiSettingsState(
 ) {
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 
+    val hasElevenLabsKey: Boolean get() = elevenLabsApiKey.isNotBlank()
+
+    /** True when the selected cloud provider has the key it needs. */
+    val cloudEngineReady: Boolean
+        get() = when (ttsEngine) {
+            TTS_ENGINE_ELEVENLABS -> hasElevenLabsKey
+            else -> hasGeminiKey
+        }
+
     /** True only when the user has both chosen the cloud engine and supplied a usable key. */
-    val cloudVoiceReady: Boolean get() = useCloudVoice && hasGeminiKey
+    val cloudVoiceReady: Boolean get() = useCloudVoice && cloudEngineReady
 }
 
 /**
@@ -83,14 +105,21 @@ class AiSettings(context: Context) {
 
     private fun load(): AiSettingsState {
         val buildGemini = BuildConfigKeys.geminiApiKey
+        val buildEleven = BuildConfigKeys.elevenLabsApiKey
         return AiSettingsState(
             // Default the cloud voice on when a key was supplied at build time, so a configured
             // build just works; otherwise stay on the free on-device engine.
-            useCloudVoice = prefs.getBoolean(KEY_USE_CLOUD, buildGemini.isNotBlank()),
+            useCloudVoice = prefs.getBoolean(
+                KEY_USE_CLOUD,
+                buildGemini.isNotBlank() || buildEleven.isNotBlank(),
+            ),
+            ttsEngine = (prefs.getString(KEY_TTS_ENGINE, null) ?: TTS_ENGINE_GEMINI)
+                .takeIf { it in TTS_ENGINES.map { (id, _) -> id } } ?: TTS_ENGINE_GEMINI,
             cloudVoiceName = (prefs.getString(KEY_VOICE, null) ?: DEFAULT_CLOUD_VOICE)
                 // Drop a Cloud TTS name saved before the switch to Gemini voices.
                 .takeIf { it in GEMINI_TTS_VOICES } ?: DEFAULT_CLOUD_VOICE,
             geminiApiKey = prefs.getString(KEY_GEMINI_KEY, null) ?: buildGemini,
+            elevenLabsApiKey = prefs.getString(KEY_ELEVENLABS_KEY, null) ?: buildEleven,
             narrationRate = prefs.getFloat(KEY_RATE, 1.0f),
             autoPlayChapters = prefs.getBoolean(KEY_AUTO_PLAY, false),
             narrationLanguage = (prefs.getString(KEY_NARRATION_LANGUAGE, null) ?: NARRATION_LANGUAGE)
@@ -105,8 +134,10 @@ class AiSettings(context: Context) {
         _state.value = next
         prefs.edit()
             .putBoolean(KEY_USE_CLOUD, next.useCloudVoice)
+            .putString(KEY_TTS_ENGINE, next.ttsEngine)
             .putString(KEY_VOICE, next.cloudVoiceName)
             .putString(KEY_GEMINI_KEY, next.geminiApiKey)
+            .putString(KEY_ELEVENLABS_KEY, next.elevenLabsApiKey)
             .putFloat(KEY_RATE, next.narrationRate)
             .putBoolean(KEY_AUTO_PLAY, next.autoPlayChapters)
             .putString(KEY_NARRATION_LANGUAGE, next.narrationLanguage)
@@ -116,8 +147,10 @@ class AiSettings(context: Context) {
 
     private companion object {
         const val KEY_USE_CLOUD = "use_cloud_voice"
+        const val KEY_TTS_ENGINE = "tts_engine"
         const val KEY_VOICE = "cloud_voice_name"
         const val KEY_GEMINI_KEY = "gemini_api_key"
+        const val KEY_ELEVENLABS_KEY = "elevenlabs_api_key"
         const val KEY_RATE = "narration_rate"
         const val KEY_AUTO_PLAY = "auto_play_chapters"
         const val KEY_NARRATION_LANGUAGE = "narration_language"
@@ -128,4 +161,5 @@ class AiSettings(context: Context) {
 /** Indirection so this file does not depend on the generated BuildConfig directly. */
 object BuildConfigKeys {
     val geminiApiKey: String get() = com.walkingtours.app.BuildConfig.GOOGLE_GEMINI_API_KEY
+    val elevenLabsApiKey: String get() = com.walkingtours.app.BuildConfig.ELEVENLABS_API_KEY
 }

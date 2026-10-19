@@ -9,7 +9,7 @@ import android.media.PlaybackParams
 import android.util.Log
 import com.walkingtours.app.ai.AiException
 import com.walkingtours.app.ai.AiSettings
-import com.walkingtours.app.ai.GeminiTtsClient
+import com.walkingtours.app.ai.Guide
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,29 +24,28 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * Narration using Gemini 3.8 Flash TTS, with the audio cached on disk.
+ * Narration using a cloud voice — Gemini 3.8 Flash TTS or ElevenLabs v4 — with the audio cached on
+ * disk. Which one is a Settings toggle; everything below the [CloudVoice] seam is identical.
  *
  * Design decisions that matter:
  *
  *  - **Synthesise once, play many times.** Each stop's narration is fetched once and written to the
- *    app's cache keyed by voice, language, delivery style and text. After that the tour plays
+ *    app's cache keyed by provider, voice, language, delivery and text. After that the tour plays
  *    entirely offline and costs nothing, which is what makes a cloud voice viable for a walking
  *    tour: the network is only needed the first time a stop is reached.
  *  - **One request for the whole narration, never a batch.** Every request is an independent
  *    performance: split a stop into paragraph-sized requests and the joins are audible as a change
- *    of narrator. The stop goes to Gemini whole, and it fits — three minutes of speech comes back in
- *    about 30 s. Paragraph breaks are flattened before sending (the model reads a blank line as a
- *    change of speaker) while the documented performance tags stay inline, where the story performs
- *    them.
+ *    of narrator. The provider handles a text that genuinely needs splitting, with the same voice
+ *    and the API's continuity fields so the join does not reset the performance.
  *  - **Speed is applied at playback, not synthesis.** Changing speed with `PlaybackParams` avoids
  *    re-billing and re-downloading the same narration at a different rate.
  *  - **Highlighting stays honest.** The model returns no word timings, so the spoken position is
  *    derived from playback time and snapped to whole words.
  */
-class GeminiTtsNarrationEngine(
+internal class CloudTtsNarrationEngine(
     context: Context,
     private val settings: AiSettings,
-    private val client: GeminiTtsClient,
+    private val voice: CloudVoice,
 ) : NarrationEngine {
 
     private val appContext = context.applicationContext
@@ -55,10 +54,9 @@ class GeminiTtsNarrationEngine(
     private val _progress = MutableStateFlow(NarrationProgress())
     override val progress: StateFlow<NarrationProgress> = _progress.asStateFlow()
 
-    override val isAvailable: Boolean get() = settings.current.hasGeminiKey
+    override val isAvailable: Boolean get() = voice.isAvailable
 
-    override val engineLabel: String
-        get() = "Gemini voice \u00b7 ${client.normalizeVoice(settings.current.cloudVoiceName)}"
+    override val engineLabel: String get() = voice.label
 
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private var focusRequest: AudioFocusRequest? = null
@@ -70,6 +68,7 @@ class GeminiTtsNarrationEngine(
     private var currentText: String = ""
     private var currentStyle: String? = null
     private var currentStopId: String? = null
+    private var currentGuide: Guide? = null
     private var currentRate: Float = 1.0f
 
     /** Where the current utterance started, as a character offset into the narration. */
@@ -79,12 +78,12 @@ class GeminiTtsNarrationEngine(
         onReady(isAvailable)
     }
 
-    override fun play(stopId: String, text: String, startOffset: Int, style: String?) {
+    override fun play(stopId: String, text: String, startOffset: Int, style: String?, guide: Guide?) {
         if (!isAvailable) {
             _progress.value = NarrationProgress(
                 state = NarrationState.UNAVAILABLE,
                 stopId = stopId,
-                message = "Add a Gemini API key in Settings to use the cloud voice.",
+                message = voice.unavailableMessage,
             )
             return
         }
@@ -93,6 +92,7 @@ class GeminiTtsNarrationEngine(
         currentStopId = stopId
         currentText = text
         currentStyle = style
+        currentGuide = guide
         baseOffset = startOffset.coerceIn(0, text.length)
 
         _progress.value = NarrationProgress(
@@ -109,7 +109,7 @@ class GeminiTtsNarrationEngine(
                 val file = ensureAudioFile(text)
                 startPlayback(file)
             } catch (e: AiException) {
-                Log.w(TAG, "Gemini TTS failed", e)
+                Log.w(TAG, "Cloud TTS failed", e)
                 _progress.value = NarrationProgress(
                     state = NarrationState.UNAVAILABLE,
                     stopId = stopId,
@@ -134,20 +134,17 @@ class GeminiTtsNarrationEngine(
 
     /** Returns the cached audio file, synthesising it first if this is the first time we need it. */
     private suspend fun ensureAudioFile(text: String): File {
-        val voice = client.normalizeVoice(settings.current.cloudVoiceName)
         val language = settings.current.narrationLanguage
-        val dir = File(appContext.cacheDir, "gemini-tts").apply { mkdirs() }
-        // Keyed on the sanitised text plus voice, language, delivery style and synthesis version.
-        val clean = TtsText.sanitizeForCloud(text)
-        val name = sha1("$voice|$language|${currentStyle.orEmpty()}|$AUDIO_CACHE_VERSION|$clean") + ".wav"
+        val dir = File(appContext.cacheDir, "cloud-tts").apply { mkdirs() }
+        // Keyed by everything the provider says changes the sound, so a cache hit is always the
+        // same performance — including which guide's voice it is, not just the words.
+        val name = sha1(voice.cacheKey(text, currentStyle, currentGuide)) + "." + voice.extension
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
 
-        // One request for the whole narration, always. A stop is ~3 minutes of audio and comes back
-        // from Gemini in about 30 s, well inside the client's timeout, and synthesising it whole is
-        // the only way it plays in one voice: paragraph-sized requests each return their own take,
-        // and the joins are audible as a change of narrator.
-        val bytes = client.synthesize(clean, voice, currentStyle, language)
+        // One request for the whole narration whenever the provider can take it. Splitting a stop
+        // is a last resort: each request is its own performance, and the joins are audible.
+        val bytes = voice.synthesize(text, currentStyle, language, currentGuide)
         // Write to a temp file and rename, so an interrupted download can never leave a truncated
         // file in the cache that would fail to play forever after.
         val temp = File(dir, "$name.part")
@@ -270,7 +267,7 @@ class GeminiTtsNarrationEngine(
                 } else {
                     0
                 }
-                play(stopId, currentText, offset.coerceIn(0, currentText.length), currentStyle)
+                play(stopId, currentText, offset.coerceIn(0, currentText.length), currentStyle, currentGuide)
             }
             return
         }
@@ -283,7 +280,9 @@ class GeminiTtsNarrationEngine(
     override fun resume() {
         val mediaPlayer = player ?: run {
             val stopId = currentStopId
-            if (stopId != null && currentText.isNotBlank()) play(stopId, currentText, 0, currentStyle)
+            if (stopId != null && currentText.isNotBlank()) {
+                play(stopId, currentText, 0, currentStyle, currentGuide)
+            }
             return
         }
         if (_progress.value.state != NarrationState.PAUSED) return
@@ -310,6 +309,7 @@ class GeminiTtsNarrationEngine(
             currentText = ""
             currentStyle = null
             currentStopId = null
+            currentGuide = null
             _progress.value = NarrationProgress(state = NarrationState.IDLE, rate = currentRate)
         }
     }
@@ -383,14 +383,7 @@ class GeminiTtsNarrationEngine(
             .joinToString("") { "%02x".format(it) }
 
     private companion object {
-        const val TAG = "GeminiTts"
+        const val TAG = "CloudTts"
         const val TICK_MS = 90L
-
-        /**
-         * Bumped whenever the synthesis strategy changes (paragraph chunks → one request for the
-         * whole narration, or a different text/delivery pipeline). Part of the cache key, so audio
-         * rendered under an older strategy is never replayed.
-         */
-        const val AUDIO_CACHE_VERSION = "single-request-v5"
     }
 }

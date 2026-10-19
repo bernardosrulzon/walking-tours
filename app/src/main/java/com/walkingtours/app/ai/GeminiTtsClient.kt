@@ -57,23 +57,15 @@ const val FEMININE_VOICE = "Kore"
 const val MASCULINE_VOICE = "Charon"
 
 /**
- * The prebuilt Gemini voices the app casts guides from, in the order they are handed out.
+ * The prebuilt Gemini voices a guide of [gender] may be cast onto; a blank gender may take either.
  *
- * The full list is 29 voices, several of which are deliberately theatrical (Fenrir, Puck) or plainly
- * odd as a narrator. These are the narration-friendly ones from the documented voice table, six per
- * gender, so four guides of the same gender can still get four different voices.
+ * Every voice the model offers is eligible, in the documented order, so the two voices of the same
+ * gender in one tour are always different people. Which voice a persona lands on is decided once, at
+ * guide creation, and persisted.
  */
-val GEMINI_CAST_VOICES: List<String> = listOf(
-    // feminine
-    "Kore", "Aoede", "Despina", "Achernar", "Leda", "Autonoe",
-    // masculine
-    "Charon", "Orus", "Alnilam", "Algieba", "Schedar", "Achird",
-)
-
-/** The cast voices that could read a guide of [gender]; a blank gender may be cast from either. */
 fun geminiVoicesFor(gender: String): List<String> {
-    val matching = GEMINI_CAST_VOICES.filter { gender.isBlank() || VOICE_GENDERS[it] == gender }
-    return matching.ifEmpty { GEMINI_CAST_VOICES }
+    val matching = GEMINI_TTS_VOICES.filter { gender.isBlank() || VOICE_GENDERS[it] == gender }
+    return matching.ifEmpty { GEMINI_TTS_VOICES }
 }
 
 /**

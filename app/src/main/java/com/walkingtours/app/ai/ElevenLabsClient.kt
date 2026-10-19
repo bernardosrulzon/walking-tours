@@ -92,9 +92,9 @@ fun castElevenVoices(guides: List<Guide>): List<Guide> {
  *  - **Audio tags**, inline in the text, in square brackets (`[laughs]`, `[sighs]`, `[short pause]`).
  *    v4 follows them well; older models would read them aloud, which is why the app only ever calls
  *    v4.
- *  - **Voice settings**: stability and style are the anti-overacting controls. Stability stays
- *    moderate (more stable than default, so repeated requests sound like the same performance),
- *    and style stays low (the voice's own character, not an amplified impression of it).
+ *  - **Voice settings**: v4 exposes stability and similarity, not the style and speed sliders of
+ *    earlier models. Stability is what keeps a guide from over-acting, so it sits above the default:
+ *    the same voice, giving the same performance, rather than a fresh dramatic take each time.
  *
  * `previous_text`/`next_text` and a stable `seed` keep a narration that has to be split into more
  * than one request sounding continuous.
@@ -127,15 +127,12 @@ class ElevenLabsClient(
             put(
                 "voice_settings",
                 JSONObject().apply {
-                    // Higher stability than the default 0.5: the same guide should sound like the
-                    // same performance, not a new take on every stop. Style is deliberately low —
-                    // the voice already has character, and amplifying it is what turns a guide
-                    // into a caricature.
+                    // v4 has two knobs. Stability above the default keeps the same guide sounding
+                    // like the same performance instead of a new dramatic take on every stop;
+                    // similarity keeps the output close to the cast voice. Style and speed do not
+                    // exist on v4, so sending them would only be decoration.
                     put("stability", 0.62)
                     put("similarity_boost", 0.8)
-                    put("style", 0.22)
-                    put("use_speaker_boost", true)
-                    put("speed", 1.0)
                 },
             )
             // Numbers, dates and currencies are everywhere in a history tour; normalize them so

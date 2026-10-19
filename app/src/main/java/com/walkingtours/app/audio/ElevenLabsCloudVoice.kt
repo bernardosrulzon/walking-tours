@@ -124,8 +124,11 @@ internal object ElevenLabsText {
     /**
      * Splits a narration that is longer than one ElevenLabs request.
      *
-     * The API takes a long text, but not unboundedly, and the app should not find the ceiling in
-     * production. 4,000 characters is below what v4 accepted in testing and well above any stop.
+     * ElevenLabs documents a 10,000-character limit for `eleven_v4` (about ten minutes of audio).
+     * A stop here is 2,700–3,500 characters, so this never fires in practice; it exists so an
+     * unusually long text can never become an invalid request, not to keep requests small. The
+     * chunks are stitched and carry previous/next text, but splitting is still a last resort: each
+     * request is its own performance.
      */
     fun split(text: String, maxChars: Int = MAX_CHARS): List<String> {
         if (text.length <= maxChars) return listOf(text)
@@ -173,7 +176,7 @@ internal object ElevenLabsText {
     /** A stable seed per narration, so a repeated request samples the same way. */
     fun seed(text: String): Long = Math.floorMod(text.hashCode(), Int.MAX_VALUE).toLong()
 
-    private const val MAX_CHARS = 4000
+    private const val MAX_CHARS = 10_000
 }
 
 /**

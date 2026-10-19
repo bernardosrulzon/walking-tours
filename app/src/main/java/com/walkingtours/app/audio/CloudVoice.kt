@@ -1,6 +1,7 @@
 package com.walkingtours.app.audio
 
 import com.walkingtours.app.ai.AiSettings
+import com.walkingtours.app.ai.GEMINI_TTS_VOICES
 import com.walkingtours.app.ai.GeminiTtsClient
 import com.walkingtours.app.ai.Guide
 
@@ -51,16 +52,20 @@ internal class GeminiCloudVoice(
     override val extension = "wav"
     override val isAvailable: Boolean get() = settings.current.hasGeminiKey
 
-    private val voice: String get() = client.normalizeVoice(settings.current.cloudVoiceName)
+    /** The guide's cast voice when it has one; the configured voice otherwise. */
+    private fun voice(guide: Guide?): String =
+        guide?.geminiVoice?.takeIf { it in GEMINI_TTS_VOICES }
+            ?: client.normalizeVoice(settings.current.cloudVoiceName)
 
-    override val label: String get() = "Gemini voice \u00b7 $voice"
+    override val label: String
+        get() = "Gemini voice \u00b7 ${voice(guide = null)}"
 
     override val unavailableMessage: String
         get() = "Add a Gemini API key in Settings to use the cloud voice."
 
     override fun cacheKey(text: String, style: String?, guide: Guide?): String =
-        "$id|$voice|${settings.current.narrationLanguage}|${style.orEmpty()}|$AUDIO_CACHE_VERSION|" +
-            TtsText.sanitizeForCloud(text)
+        "$id|${voice(guide)}|${settings.current.narrationLanguage}|${style.orEmpty()}|" +
+            "$AUDIO_CACHE_VERSION|${TtsText.sanitizeForCloud(text)}"
 
     override suspend fun synthesize(
         text: String,
@@ -69,7 +74,7 @@ internal class GeminiCloudVoice(
         guide: Guide?,
     ): ByteArray = client.synthesize(
         TtsText.sanitizeForCloud(text),
-        voice,
+        voice(guide),
         style,
         language,
     )

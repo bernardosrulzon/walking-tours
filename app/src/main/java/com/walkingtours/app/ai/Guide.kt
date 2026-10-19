@@ -24,6 +24,8 @@ data class Guide(
     val angle: String = "",
     /** The ElevenLabs voice cast for this guide, chosen once when the persona is created. */
     val elevenVoice: String = "",
+    /** The Gemini prebuilt voice cast for this guide, chosen the same way. */
+    val geminiVoice: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -33,6 +35,7 @@ data class Guide(
         .put("gender", gender)
         .put("angle", angle)
         .put("elevenVoice", elevenVoice)
+        .put("geminiVoice", geminiVoice)
 
     companion object {
         fun fromJson(json: JSONObject): Guide? {
@@ -47,6 +50,7 @@ data class Guide(
                     .takeIf { it == "feminine" || it == "masculine" }.orEmpty(),
                 angle = json.optString("angle").trim(),
                 elevenVoice = json.optString("elevenVoice").trim(),
+                geminiVoice = json.optString("geminiVoice").trim(),
             )
         }
 
@@ -124,6 +128,8 @@ val FALLBACK_GUIDES_PT: List<Guide> = listOf(
     ),
 )
 
-/** The built-in guides in the chosen narration language, cast onto ElevenLabs voices. */
+/** The built-in guides in the chosen narration language, cast onto both engines' voices. */
 fun fallbackGuides(language: String): List<Guide> =
-    castElevenVoices(if (language == NARRATION_LANGUAGE_PT_BR) FALLBACK_GUIDES_PT else FALLBACK_GUIDES)
+    castElevenVoices(
+        castGeminiVoices(if (language == NARRATION_LANGUAGE_PT_BR) FALLBACK_GUIDES_PT else FALLBACK_GUIDES),
+    )

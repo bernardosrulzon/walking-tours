@@ -57,10 +57,49 @@ const val FEMININE_VOICE = "Kore"
 const val MASCULINE_VOICE = "Charon"
 
 /**
- * The voice [guide] must speak with: the current one when its gender already matches, else the
- * default voice of the guide's gender. A guide with no recorded gender keeps whatever is configured.
+ * The prebuilt Gemini voices the app casts guides from, in the order they are handed out.
+ *
+ * The full list is 29 voices, several of which are deliberately theatrical (Fenrir, Puck) or plainly
+ * odd as a narrator. These are the narration-friendly ones from the documented voice table, six per
+ * gender, so four guides of the same gender can still get four different voices.
+ */
+val GEMINI_CAST_VOICES: List<String> = listOf(
+    // feminine
+    "Kore", "Aoede", "Despina", "Achernar", "Leda", "Autonoe",
+    // masculine
+    "Charon", "Orus", "Alnilam", "Algieba", "Schedar", "Achird",
+)
+
+/** The cast voices that could read a guide of [gender]; a blank gender may be cast from either. */
+fun geminiVoicesFor(gender: String): List<String> {
+    val matching = GEMINI_CAST_VOICES.filter { gender.isBlank() || VOICE_GENDERS[it] == gender }
+    return matching.ifEmpty { GEMINI_CAST_VOICES }
+}
+
+/**
+ * Casts a freshly generated set of guides onto Gemini voices, giving each a distinct voice within
+ * its gender — the same rule as the ElevenLabs casting, so the four guides of a tour are four
+ * people on either engine rather than two voices and two accents of one.
+ */
+fun castGeminiVoices(guides: List<Guide>): List<Guide> {
+    val used = mutableSetOf<String>()
+    return guides.map { guide ->
+        val candidates = geminiVoicesFor(guide.gender)
+        val pick = candidates.firstOrNull { it !in used }
+            ?: candidates[Math.floorMod(guide.id.hashCode(), candidates.size)]
+        used += pick
+        guide.copy(geminiVoice = pick)
+    }
+}
+
+/**
+ * The voice [guide] must speak with: its own cast voice when it has one, else the current one when
+ * its gender already matches, else the default voice of the guide's gender. A guide with no recorded
+ * gender keeps whatever is configured.
  */
 fun voiceForGuide(guide: Guide, currentVoice: String): String {
+    val cast = guide.geminiVoice.takeIf { it in GEMINI_TTS_VOICES }
+    if (cast != null) return cast
     val want = guide.gender.takeIf { it == "feminine" || it == "masculine" }
         ?: return if (currentVoice in GEMINI_TTS_VOICES) currentVoice else DEFAULT_CLOUD_VOICE
     val current = if (currentVoice in GEMINI_TTS_VOICES) currentVoice else DEFAULT_CLOUD_VOICE

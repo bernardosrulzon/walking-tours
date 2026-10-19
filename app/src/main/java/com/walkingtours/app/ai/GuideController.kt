@@ -48,7 +48,7 @@ data class NarrationRequest(
  * audio are reused.
  */
 /** Bump when the rewrite prompts change, so cached narrations from the old prompts are ignored. */
-const val NARRATION_PROMPT_VERSION = "18"
+const val NARRATION_PROMPT_VERSION = "19"
 
 fun guideSignature(
     guide: Guide?,
@@ -65,6 +65,20 @@ fun guideSignature(
             language,
         ).joinToString("|")
     }
+
+/**
+ * The delivery direction for a guide on this tour.
+ *
+ * Deliberately one per tour and guide, not one per stop. The walker chose a character, and hearing
+ * that character change mood between chapters is the drift the one-take synthesis exists to remove.
+ * The guide's own temperament is the base; the tune feedback, where the walker left any, is the
+ * adjustment they asked for, and it applies to every stop of the walk.
+ */
+fun deliveryStyleFor(guide: Guide, tone: String?): String {
+    val base = guide.style.ifBlank { "warm and conversational, unhurried" }
+    val trimmed = tone?.trim().orEmpty()
+    return if (trimmed.isBlank()) base else "$base. The walker asked for this walk: $trimmed"
+}
 
 /**
  * The guide personas, and the narration they tell.
@@ -213,7 +227,10 @@ class GuideController(
                 Log.i(TAG, "Cache hit for ${request.key} (${it.text.length} chars)")
                 return SpokenLine(it.text, it.style, guide)
             }
-        if (!settings.current.hasGeminiKey) return SpokenLine(request.authored, null, guide)
+        val authoredStyle = deliveryStyleFor(guide, persona.tone(tourId))
+        if (!settings.current.hasGeminiKey) {
+            return SpokenLine(request.authored, authoredStyle, guide)
+        }
 
         val jobKey = "$signature|$key"
         val deferred = jobs.getOrPut(jobKey) {
@@ -236,7 +253,7 @@ class GuideController(
                     persist()
                     Log.i(TAG, "Rewrote ${request.key}: ${line.text.length} chars")
                 }
-                line ?: SpokenLine(request.authored, guide.style, guide)
+                line ?: SpokenLine(request.authored, authoredStyle, guide)
             }
         }
         return deferred.await()
@@ -287,7 +304,7 @@ class GuideController(
             }
         }
         // Cast now, not at playback: four guides of the same gender must not share one voice.
-        return castElevenVoices(guides)
+        return castElevenVoices(castGeminiVoices(guides))
     }
 
     private suspend fun rewrite(tourId: String, guide: Guide, request: NarrationRequest): SpokenLine {
@@ -311,8 +328,9 @@ class GuideController(
             maxOutputTokens = 3000,
             thinkingBudget = 0,
         )
-        return parseSpokenLine(raw, guide)
+        val line = parseSpokenLine(raw, guide)
             ?: throw IllegalStateException("The rewrite came back unusable")
+        return line.copy(style = deliveryStyleFor(guide, persona.tone(tourId)))
     }
 
     private fun narrationSystem(
@@ -412,17 +430,15 @@ class GuideController(
         appendLine("  may use none in a stop; a warm, animated one may use several. A tag in every sentence")
         appendLine("  is a performer milking the part, not a person telling a story.")
         appendLine()
-        appendLine("Also give a sustained style direction for the whole delivery, matching this guide and")
-        appendLine("the mood of this stop (for example \"calm and conversational, unhurried\").")
-        appendLine()
-        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
+        appendLine("Reply with ONLY a JSON object: {\"text\": \"...\"}. No code fences.")
     }
 
     /**
-     * The model is asked for `{"style": "...", "text": "..."}`. It is tolerated if it answers with
-     * plain prose instead — the whole reply becomes the text. A reply that looks like JSON but
-     * cannot be parsed (truncated, say) yields null, so the caller retries rather than speaking
-     * broken JSON at the walker.
+     * The model is asked for `{"text": "..."}`. It is tolerated if it answers with plain prose
+     * instead — the whole reply becomes the text. A reply that looks like JSON but cannot be parsed
+     * (truncated, say) yields null, so the caller retries rather than speaking broken JSON at the
+     * walker. A `style` the reply happens to carry is ignored: delivery belongs to the guide, fixed
+     * for the whole tour, and the caller attaches it.
      */
     private fun parseSpokenLine(raw: String, guide: Guide): SpokenLine? {
         val trimmed = raw.trim()
@@ -431,16 +447,13 @@ class GuideController(
         if (jsonText != null) {
             val obj = runCatching { JSONObject(jsonText) }.getOrNull()
             val text = obj?.optString("text")?.trim().orEmpty()
-            if (text.isNotBlank()) {
-                val style = obj!!.optString("style").trim().ifBlank { guide.style }
-                return SpokenLine(text, style, guide)
-            }
+            if (text.isNotBlank()) return SpokenLine(text, null, guide)
             // Malformed JSON: salvage the text field if it is recoverable, else give up.
             val salvaged = salvageTextField(jsonText) ?: return null
-            return SpokenLine(salvaged, guide.style, guide)
+            return SpokenLine(salvaged, null, guide)
         }
         val prose = trimmed.removeSurrounding("\"").trim()
-        return if (prose.isNotBlank()) SpokenLine(prose, guide.style, guide) else null
+        return if (prose.isNotBlank()) SpokenLine(prose, null, guide) else null
     }
 
     /** Reads the value of `"text"` out of a JSON string that may have been cut off mid-way. */
@@ -648,8 +661,10 @@ class GuideController(
             maxOutputTokens = 4000,
             thinkingBudget = 0,
         )
-        return parseSpokenLine(raw, guide ?: NEUTRAL_DETOUR_GUIDE)
+        val voice = guide ?: NEUTRAL_DETOUR_GUIDE
+        val line = parseSpokenLine(raw, voice)
             ?: throw IllegalStateException("The detour came back unusable")
+        return line.copy(style = deliveryStyleFor(voice, persona.tone(tourId)))
     }
 
     private fun detourSystem(
@@ -709,10 +724,7 @@ class GuideController(
         appendLine("  may use none in a stop; a warm, animated one may use several. A tag in every sentence")
         appendLine("  is a performer milking the part, not a person telling a story.")
         appendLine()
-        appendLine("Also give a sustained style direction for the whole delivery, matching this voice and")
-        appendLine("the mood of the subject (for example \"warm and unhurried\").")
-        appendLine()
-        appendLine("Reply with ONLY a JSON object: {\"style\": \"...\", \"text\": \"...\"}. No code fences.")
+        appendLine("Reply with ONLY a JSON object: {\"text\": \"...\"}. No code fences.")
     }
 
     private companion object {

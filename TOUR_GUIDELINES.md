@@ -156,7 +156,9 @@ this place; when the persona is unsure, it leaves the detail out.
 There is no interest question any more: the four guides offered for a tour are chosen for that tour,
 each dwelling on a different aspect the stops can actually feed (history, religion, architecture,
 food and daily life, trade and power, legend — whatever this walk rewards). Picking a guide is
-picking what you want more of.
+picking what you want more of. Each guide is cast onto a voice of its own on both cloud engines, so
+the four are four people, and the delivery direction is the guide's temperament plus any tune
+feedback — one per tour and guide, never per stop, so the character never changes mood mid-walk.
 
 ## 10. Detours: generated side chapters
 

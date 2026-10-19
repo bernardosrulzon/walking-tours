@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.walkingtours.app.ServiceLocator
+import com.walkingtours.app.ai.TEXT_MODEL
 import com.walkingtours.app.ai.THEME_MODES
 import kotlinx.coroutines.launch
 
@@ -77,9 +78,16 @@ fun SettingsScreen(onBack: () -> Unit) {
         apiStatus = "Checking\u2026"
         scope.launch {
             try {
-                ServiceLocator.geminiClient.listModels()
-                apiOk = true
-                apiStatus = "Gemini API working"
+                val models = ServiceLocator.geminiClient.listModels()
+                // The app calls one pinned model, so a working key that cannot see it is a failure
+                // worth naming here rather than in the middle of a walk.
+                if (models.none { it.id == TEXT_MODEL }) {
+                    apiOk = false
+                    apiStatus = "$TEXT_MODEL is not available on this key"
+                } else {
+                    apiOk = true
+                    apiStatus = "Gemini API working \u00b7 $TEXT_MODEL"
+                }
             } catch (e: Exception) {
                 apiOk = false
                 apiStatus = "Gemini API not working: ${e.message}"

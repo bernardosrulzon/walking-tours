@@ -112,8 +112,6 @@ class GuideController(
      */
     private val guideSuggestions = mutableMapOf<String, List<Guide>>()
 
-    private var model: String? = null
-
     /** The signature the current guide and tone produce for [tourId], or null. */
     fun signatureFor(tourId: String): String? {
         val persona = personaSettings.current
@@ -249,9 +247,6 @@ class GuideController(
         scope.launch(Dispatchers.IO) { store.save(snapshot) }
     }
 
-    private suspend fun resolvedModel(): String =
-        model ?: geminiClient.resolveModel().also { model = it }
-
     private suspend fun requestGuides(
         tour: TourEntity,
         stops: List<StopEntity>,
@@ -263,7 +258,6 @@ class GuideController(
             "English"
         }
         val text = geminiClient.generate(
-            model = resolvedModel(),
             systemInstruction = GUIDE_SYSTEM,
             history = emptyList(),
             prompt = buildString {
@@ -298,7 +292,6 @@ class GuideController(
         val persona = personaSettings.current
         val tour = repository.getTour(tourId)
         val raw = geminiClient.generate(
-            model = resolvedModel(),
             systemInstruction = narrationSystem(
                 tour,
                 guide,
@@ -591,7 +584,6 @@ class GuideController(
             "English"
         }
         val text = geminiClient.generate(
-            model = resolvedModel(),
             systemInstruction = DETOUR_SYSTEM,
             history = emptyList(),
             prompt = buildString {
@@ -637,7 +629,6 @@ class GuideController(
         val persona = personaSettings.current
         val tour = repository.getTour(tourId)
         val raw = geminiClient.generate(
-            model = resolvedModel(),
             systemInstruction = detourSystem(
                 tour,
                 guide,

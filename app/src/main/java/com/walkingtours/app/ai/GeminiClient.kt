@@ -1,7 +1,6 @@
 package com.walkingtours.app.ai
 
 import android.content.Context
-import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -24,12 +23,23 @@ data class ChatMessage(
 )
 
 /**
+ * The one text model this app calls: Gemini 3.8 Flash.
+ *
+ * Pinned rather than discovered. Discovery used to pick the newest model the key could see, which
+ * silently moved narration, guides, detours and chat onto Gemini 4 Argon the day it appeared — a
+ * model several times the price. Every text call goes through [GeminiClient.generate], which uses
+ * this constant, so there is one place to change it if the model is ever retired.
+ */
+const val TEXT_MODEL = "gemini-3.8-flash"
+
+/**
  * Gemini API client.
  *
- * The model name is resolved at runtime rather than hard-coded. Google retires model IDs regularly,
- * and a travel app that stops answering because a pinned model was deprecated is worse than one that
- * simply asks which models the key can see and picks a good one. A specific model can still be
- * pinned in settings.
+ * The model is pinned to [TEXT_MODEL] on purpose. Google retires model ids, and it also ships newer
+ * ones, so a "pick the newest the key can see" rule silently moves the whole app onto whatever
+ * expensive model was released most recently — that is how narration and chat ended up billed against
+ * Gemini 4 Argon. Cost is part of this app's design, so the model is a constant, not a discovery.
+ * [listModels] is still used, but only to check that the key and the pinned model are alive.
  */
 class GeminiClient(
     private val context: Context,
@@ -54,30 +64,7 @@ class GeminiClient(
         }
     }
 
-    /**
-     * Picks the best text model the key can actually see. The model name is never pinned, so a
-     * retired id can never leave the app without an answer.
-     */
-    suspend fun resolveModel(): String {
-        val available = runCatching { listModels() }
-            .onFailure { Log.w(TAG, "Model discovery failed, using fallback", it) }
-            .getOrDefault(emptyList())
-
-        return available
-            .map { it.id }
-            .filter { it.startsWith("gemini") }
-            // Text chat models: exclude the speech, image, live and embedding variants.
-            .filterNot { id ->
-                listOf("tts", "image", "live", "embedding", "transcribe", "audio")
-                    .any { id.contains(it, ignoreCase = true) }
-            }
-            .sortedByDescending { versionScore(it) }
-            .firstOrNull()
-            ?: FALLBACK_MODEL
-    }
-
     suspend fun generate(
-        model: String,
         systemInstruction: String,
         history: List<ChatMessage>,
         prompt: String,
@@ -150,7 +137,7 @@ class GeminiClient(
         }
 
         val json = AiHttp.postJson(
-            "$BASE_URL/models/$model:generateContent?key=$key",
+            "$BASE_URL/models/$TEXT_MODEL:generateContent?key=$key",
             body,
             AppIdentityHeaders.build(context),
             readTimeoutMs = GENERATE_TIMEOUT_MS,
@@ -180,19 +167,6 @@ class GeminiClient(
         return text
     }
 
-    /** Higher is newer. Extracts the version from ids like "gemini-3.8-flash". */
-    private fun versionScore(id: String): Double {
-        val match = Regex("""gemini-(\d+(?:\.\d+)?)""").find(id) ?: return 0.0
-        val version = match.groupValues[1].toDoubleOrNull() ?: return 0.0
-        // Prefer plain and "flash" over "lite", which is cheaper but noticeably weaker.
-        val bonus = when {
-            id.contains("flash-lite", true) -> 0.1
-            id.contains("flash", true) -> 0.3
-            else -> 0.2
-        }
-        return version + bonus
-    }
-
     private fun requireKey(): String {
         val key = apiKey()
         if (key.isBlank()) {
@@ -211,11 +185,5 @@ class GeminiClient(
          * a longer read timeout than the default chat call.
          */
         const val GENERATE_TIMEOUT_MS = 120_000
-
-        /**
-         * Used only when model discovery itself fails, which normally means a network problem.
-         * The next call will discover properly.
-         */
-        const val FALLBACK_MODEL = "gemini-2.0-flash"
     }
 }

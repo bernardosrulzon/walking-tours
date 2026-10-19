@@ -64,9 +64,6 @@ class TravelChatController(
     private var currentStop: StopEntity? = null
     private var allStops: List<StopEntity> = emptyList()
 
-    /** Discovered once per process; Google retires model ids, so we ask rather than hard-code. */
-    private var resolvedModel: String? = null
-
     fun open(tourId: String, stopId: String?) {
         val key = "$tourId|${stopId.orEmpty()}"
         currentKey = key
@@ -115,10 +112,7 @@ class TravelChatController(
 
         scope.launch {
             try {
-                val model = resolvedModel ?: geminiClient.resolveModel()
-                    .also { resolvedModel = it }
                 val answer = geminiClient.generate(
-                    model = model,
                     systemInstruction = buildSystemInstruction(hasImage = image != null),
                     history = history,
                     prompt = trimmed.ifEmpty { "Tell me what you can about this photo." },
